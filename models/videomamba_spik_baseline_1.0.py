@@ -436,22 +436,6 @@ class MLLABlock(nn.Module):
 
         return final_feat
 
-    def forward(self, x):
-        
-        
-        # x = self.out_bn(x)
-        # x = self.out_lif(x)
-        xz = self.dim2(xz.permute(0,2,1)).permute(0, 2,1)
-        xz = torch.cat([cls_token, xz], dim=1)
-        xz = shortcut + self.drop_path(xz)
-
-        cls_token = xz[:, 0:1, :]
-
-        xz = torch.cat([cls_token, xz], dim=1)
-
-        # FFN
-        xz = xz + self.drop_path(self.mlp(self.norm2(xz)))
-        return xz
 
     def extra_repr(self) -> str:
         return f"dim={self.dim}, input_resolution={self.input_resolution}, num_heads={self.num_heads}, " \
