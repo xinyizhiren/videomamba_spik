@@ -269,8 +269,8 @@ class LinearAttention(nn.Module):
         self.input_resolution = input_resolution
         self.num_heads = num_heads
         self.qk = nn.Linear(dim, dim * 2, bias=qkv_bias)
-
-        self.qk_bn = nn.BatchNorm1d(dim )
+        print(f"dim={dim}, 2*dim={2*dim}")
+        self.qk_bn = nn.LayerNorm(2 * dim) 
         self.qk_lif = MultiStepLIFNode(tau=2.0, detach_reset=True, backend='torch')
 
         self.elu = nn.ELU()
@@ -283,35 +283,90 @@ class LinearAttention(nn.Module):
             x: input features with shape of (B, N, C)
         """
         b, n, c = x.shape
-        h = int(n ** 0.5)
-        w = int(n ** 0.5)
+        H, W = self.input_resolution
+        spatial_len = H * W  # 纯空间特征的长度（不含CLS）
         num_heads = self.num_heads
         head_dim = c // num_heads
-       
-        qk = self.qk_lif(self.qk_bn(self.qk(x) )).reshape(b, n, 2, c).permute(2, 0, 1, 3)
-        # qk = self.qk_bn(qk)
-        
-        # qk = self.qk(x).reshape(b, n, 2, c).permute(2, 0, 1, 3)
-        q, k, v = qk[0], qk[1], x
-        # q, k, v: b, n, c
 
-        q = self.elu(q) + 1.0
-        k = self.elu(k) + 1.0
-        q_rope = self.rope(q.reshape(b, h, w, c)).reshape(b, n, num_heads, head_dim).permute(0, 2, 1, 3)
+        if n == spatial_len + 1:  # 含CLS的情况
+            cls_token = x[:, 0:1, :]  # [B, 1, C]，提取CLS
+            spatial_feat = x[:, 1:, :]  # [B, H×W, C]，提取空间特征
+        else:  # 不含CLS的情况（兼容原始逻辑）
+            cls_token = None
+            spatial_feat = x  # [B, H×W, C]
         
-        k_rope = self.rope(k.reshape(b, h, w, c)).reshape(b, n, num_heads, head_dim).permute(0, 2, 1, 3)
-        q = q.reshape(b, n, num_heads, head_dim).permute(0, 2, 1, 3)
+        qk = self.qk_lif(self.qk_bn(self.qk(x))).reshape(b, n, 2, c).permute(2, 0, 1, 3)
+        q, k, v = qk[0], qk[1], x  # q, k, v形状：[B, n, C]（含CLS时n=1+H×W）
+
+        q = self.elu(q) + 1.0  # 保持数值稳定
+        k = self.elu(k) + 1.0
+
+         # 2. 分离Q/K中的CLS部分和空间部分
+        if cls_token is not None:
+            # Q的CLS部分（不参与RoPE）和空间部分（参与RoPE）
+            q_cls = q[:, 0:1, :]  # [B, 1, C]
+            q_spatial = q[:, 1:, :]  # [B, H×W, C]
+
+            # K的CLS部分和空间部分
+            k_cls = k[:, 0:1, :]  # [B, 1, C]
+            k_spatial = k[:, 1:, :]  # [B, H×W, C]
+
+            # V的CLS部分和空间部分（V=x，所以直接分离）
+            v_cls = v[:, 0:1, :]  # [B, 1, C]
+            v_spatial = v[:, 1:, :]  # [B, H×W, C]
+        else:
+            # 不含CLS时，全部为空间特征
+            q_cls, k_cls, v_cls = None, None, None
+            q_spatial, k_spatial, v_spatial = q, k, v
+
+         # 3. 对Q/K的空间部分应用RoPE（CLS不参与）
+        q_spatial_rope = self.rope(
+            q_spatial.reshape(b, H, W, c)  # 转为空间形状 [B, H, W, C]
+        ).reshape(b, spatial_len, c)  # 转回序列形状 [B, H×W, C]
+
+        k_spatial_rope = self.rope(
+            k_spatial.reshape(b, H, W, c)
+        ).reshape(b, spatial_len, c)
+
+
+        # 4. 重组Q、K（CLS部分 + 带RoPE的空间部分）
+        if cls_token is not None:
+            q = torch.cat([q_cls, q_spatial_rope], dim=1)  # [B, 1+H×W, C]
+            k = torch.cat([k_cls, k_spatial_rope], dim=1)  # [B, 1+H×W, C]
+
+        # --------------- 第三步：常规注意力计算（含CLS参与交互） ---------------
+
+        # 多头拆分（含CLS的整个序列）
+        q = q.reshape(b, n, num_heads, head_dim).permute(0, 2, 1, 3)  # [B, num_heads, n, head_dim]
         k = k.reshape(b, n, num_heads, head_dim).permute(0, 2, 1, 3)
         v = v.reshape(b, n, num_heads, head_dim).permute(0, 2, 1, 3)
 
+        # 线性注意力计算
         z = 1 / (q @ k.mean(dim=-2, keepdim=True).transpose(-2, -1) + 1e-6)
-        kv = (k_rope.transpose(-2, -1) * (n ** -0.5)) @ (v * (n ** -0.5))
-        x = q_rope @ kv * z
+        kv = (k.transpose(-2, -1) * (n ** -0.5)) @ (v * (n ** -0.5))
+        x = q @ kv * z
 
-        x = x.transpose(1, 2).reshape(b, n, c)
-        v = v.transpose(1, 2).reshape(b, h, w, c).permute(0, 3, 1, 2)
-        x = x + self.lepe(v).permute(0, 2, 3, 1).reshape(b, n, c)
+        # 还原形状
+        x = x.transpose(1, 2).reshape(b, n, c)  # [B, n, C]（含CLS时n=1+H×W）
 
+        # --------------- 第四步：LePE仅作用于空间特征，再与CLS拼接 ---------------
+        if cls_token is not None:
+            # 分离注意力输出中的CLS和空间特征
+            x_cls = x[:, 0:1, :]  # [B, 1, C]
+            x_spatial = x[:, 1:, :]  # [B, H×W, C]
+
+            # LePE仅增强空间特征
+            v_spatial = v_spatial.reshape(b, H, W, c).permute(0, 3, 1, 2)  # [B, C, H, W]
+            lepe_spatial = self.lepe(v_spatial).permute(0, 2, 3, 1).reshape(b, spatial_len, c)  # [B, H×W, C]
+
+            # 空间特征叠加LePE，再与CLS拼接
+            x_spatial = x_spatial + lepe_spatial
+            x = torch.cat([x_cls, x_spatial], dim=1)  # [B, 1+H×W, C]
+        else:
+            # 不含CLS时，直接对全部特征应用LePE
+            v = v.transpose(1, 2).reshape(b, H, W, c).permute(0, 3, 1, 2)
+            x = x + self.lepe(v).permute(0, 2, 3, 1).reshape(b, n, c)
+        
         return x
 
     def extra_repr(self) -> str:
@@ -404,8 +459,9 @@ class MLLABlock(nn.Module):
         feat_rev_attn = self.attn(feat_rev_with_cls)
 
         # 7. 反序特征翻转 + CLS融合
+        cls_fused = self.cls_norm(feat_pos_attn[:, 0:1, :] + feat_rev_attn[:, 0:1, :]) 
         feat_rev_attn_flipped = feat_rev_attn.flip(1)  # 反序特征翻转回正序
-        cls_fused = self.cls_norm(feat_pos_attn[:, 0:1, :] + feat_rev_attn_flipped[:, 0:1, :])
+  
 
         # 8. 图像特征融合 + 激活门控应用
         img_feat_attn_pos = feat_pos_attn[:, 1:, :]
@@ -435,7 +491,6 @@ class MLLABlock(nn.Module):
         final_feat = final_feat + self.drop_path(self.mlp(self.norm3(final_feat)))
 
         return final_feat
-
 
     def extra_repr(self) -> str:
         return f"dim={self.dim}, input_resolution={self.input_resolution}, num_heads={self.num_heads}, " \
