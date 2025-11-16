@@ -334,107 +334,123 @@ class MLLABlock(nn.Module):
 
     def __init__(self, dim, input_resolution, num_heads, mlp_ratio=4., qkv_bias=True, drop=0., drop_path=0.,
                  act_layer=nn.GELU, norm_layer=nn.LayerNorm, **kwargs):
+
         super().__init__()
         self.dim = dim
         self.input_resolution = input_resolution
         self.num_heads = num_heads
         self.mlp_ratio = mlp_ratio
 
+        # 空间增强：深度可分离卷积（CPE）
         self.cpe1 = nn.Conv2d(dim, dim, 3, padding=1, groups=dim)
-        self.norm1 = norm_layer(dim)
+        self.cpe2 = nn.Conv2d(dim, dim, 3, padding=1, groups=dim)
 
-        self.in_proj = nn.Linear(dim, dim)
-        # self.in_bn = nn.BatchNorm1d(dim * 4 )
-        # self.in_lif = MultiStepLIFNode(tau=2.0, detach_reset=True, backend='torch')
+        # 归一化层
+        self.norm1 = norm_layer(dim)  # 图像特征归一化
+        self.norm2 = norm_layer(dim)  # FFN前归一化
+        self.norm3 = norm_layer(dim)  # 残差融合前归一化
+        self.cls_norm = norm_layer(dim)  # CLS融合后归一化
 
-        self.to2 = nn.Linear(dim, dim * 2)
-        self.act_proj = nn.Linear(dim, dim)
-        # self.act_bn = nn.BatchNorm1d(dim * 4 )
-        # self.act_lif = MultiStepLIFNode(tau=2.0, detach_reset=True, backend='torch')
+        # 特征投影与激活
+        self.in_proj = nn.Linear(dim, dim)  # 输入投影
+        self.act_proj = nn.Linear(dim, dim)  # 激活投影
+        self.out_proj = nn.Linear(dim, dim)  # 输出投影
+        self.feat_downsample = nn.Linear(dim*2, dim)
+        self.act = nn.SiLU()  # 激活函数
 
-        self.dwc = nn.Conv2d(dim, dim, 3, padding=1, groups=dim)
-        self.act = nn.SiLU()
+        # 核心组件
+        self.dwc = nn.Conv2d(dim, dim, 3, padding=1, groups=dim)  # 深度卷积
         self.attn = LinearAttention(dim=dim, input_resolution=input_resolution, num_heads=num_heads, qkv_bias=qkv_bias)
-
-        self.dim2 = nn.Linear(512, 256)
-        self.out_proj = nn.Linear(dim, dim)
-        # self.out_bn = nn.BatchNorm1d(dim * 4 )
-        # self.out_lif = MultiStepLIFNode(tau=2.0, detach_reset=True, backend='torch')
-
+        self.mlp = Mlp(in_features=dim, hidden_features=int(dim * mlp_ratio), act_layer=act_layer, drop=drop)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        self.cpe2 = nn.Conv2d(dim, dim, 3, padding=1, groups=dim)
-        self.norm2 = norm_layer(dim)
-        self.mlp = Mlp(in_features=dim, hidden_features=int(dim * mlp_ratio), act_layer=act_layer, drop=drop)
+    
+    def forward(self, x):
+        B, total_len, C = x.shape  # total_len = 1 (CLS) + H*W (图像特征)
+        H, W = self.input_resolution
+        img_len = H * W  # 图像特征长度（不含CLS）
+
+        # 1. 分离CLS token与图像特征
+        cls_token = x[:, 0:1, :]  # [B, 1, C]
+        img_feat = x[:, 1:, :]    # [B, H*W, C]
+
+        # 2. 图像特征空间增强（CPE1）+ 构建残差shortcut（含CLS）
+        img_feat = img_feat + self.cpe1(
+            img_feat.reshape(B, H, W, C).permute(0, 3, 1, 2)  # [B, C, H, W]
+        ).flatten(2).permute(0, 2, 1)  # 转回 [B, H*W, C]
+        shortcut = torch.cat([cls_token, img_feat], dim=1)  # [B, 1+H*W, C]
+
+        # 3. 双向特征构建（正序+反序）
+        img_feat_norm = self.norm1(img_feat)
+        img_feat_rev = img_feat_norm.flip(1)  # 图像特征反序
+        img_feat_bidir = torch.cat([img_feat_norm, img_feat_rev], dim=1)  # [B, 2*H*W, C]
+
+        # 4. 激活门控计算
+        act_gate = self.act(self.act_proj(img_feat_bidir))  # [B, 2*H*W, C]
+
+        # 5. 深度卷积增强 + 特征分离
+        img_feat_proj = self.in_proj(img_feat_bidir).view(B, 2*H, W, C)  # reshape适配卷积
+        img_feat_conv = self.act(
+            self.dwc(img_feat_proj.permute(0, 3, 1, 2))  # [B, C, 2H, W]
+        ).permute(0, 2, 3, 1).view(B, 2*img_len, C)  # 转回 [B, 2*H*W, C]
+        
+        feat_pos, feat_rev = img_feat_conv.chunk(2, dim=1)  # 分离正序/反序图像特征
+
+        # 6. 拼接CLS + 线性注意力
+        feat_pos_with_cls = torch.cat([cls_token, feat_pos], dim=1)  # [B, 1+H*W, C]
+        feat_rev_with_cls = torch.cat([cls_token, feat_rev], dim=1)  # [B, 1+H*W, C]
+        
+        feat_pos_attn = self.attn(feat_pos_with_cls)
+        feat_rev_attn = self.attn(feat_rev_with_cls)
+
+        # 7. 反序特征翻转 + CLS融合
+        feat_rev_attn_flipped = feat_rev_attn.flip(1)  # 反序特征翻转回正序
+        cls_fused = self.cls_norm(feat_pos_attn[:, 0:1, :] + feat_rev_attn_flipped[:, 0:1, :])
+
+        # 8. 图像特征融合 + 激活门控应用
+        img_feat_attn_pos = feat_pos_attn[:, 1:, :]
+        img_feat_attn_rev = feat_rev_attn_flipped[:, 1:, :]
+        img_feat_fused = torch.cat([img_feat_attn_pos, img_feat_attn_rev], dim=1)  # [B, 2*H*W, C]
+        img_feat_out = self.out_proj(img_feat_fused * act_gate)  # 门控筛选
+
+        # 维度缩减
+        img_feat_out = img_feat_out.view(B, img_len, 2*C)  # [B, H×W, 2*C]（适配Linear的输入维度）
+        img_feat_out = self.feat_downsample(img_feat_out)  # [B, C, H×W]（维度缩减）
+
+        # 9. 残差连接（含CLS）
+        out_with_cls = torch.cat([cls_fused, img_feat_out], dim=1)
+        out_res = shortcut + self.drop_path(out_with_cls)
+
+        # 10. 第二次空间增强（CPE2）+ 残差融合
+        cls_fused_new = out_res[:, 0:1, :]
+        img_feat_res = out_res[:, 1:, :]
+        
+        img_feat_cpe2 = self.cpe2(
+            img_feat_res.reshape(B, H, W, C).permute(0, 3, 1, 2)
+        ).flatten(2).permute(0, 2, 1)
+        img_feat_final = img_feat + self.norm2(img_feat_cpe2)
+
+        # 11. 拼接CLS + FFN
+        final_feat = torch.cat([cls_fused_new, img_feat_final], dim=1)
+        final_feat = final_feat + self.drop_path(self.mlp(self.norm3(final_feat)))
+
+        return final_feat
 
     def forward(self, x):
-        H, W = self.input_resolution
         
-        # B, L, C = x.shape
-        B, L, C = x.shape
-        # assert L == H * W, "input feature has wrong size"
-        # x = x.flatten(0, 1)
-
-        cls_token = x[:, 0:1, :]  # 提取CLS token，形状保持 [B*T, 1, C]（保留维度方便后续拼接）
-        x = x[:, 1:, :]    # 提取图像特征，形状为 [B*T, N, C]（N=H*W）
         
-        x = x + self.cpe1(x.reshape(B, H, W, C).permute(0, 3, 1, 2)).flatten(2).permute(0, 2, 1)
-        # x = x + self.cpe1(x.reshape(B, H, W, C).permute(0, 3, 1, 2)).flatten(2).permute(0, 2, 1)
-    
-        # 3. 拼接回CLS token，恢复原始形状 [B*T, N+1, C]
-        x = torch.cat([cls_token, x], dim=1)
-
-
-
-        # start
-
-
-
-
-
-        
-
-        shortcut = x
-
-        x = self.norm1(x)
-        # x2 = self.to2(x)
-        # xf, xb = torch.chunk(x2, 2, dim=2)
-        xb = x.flip(1)
-        xz = torch.cat([x, xb], dim=1)
-
-
-        xz = self.act_proj(xz)
-        # act_res = self.act(self.act_lif(self.act_bn(x)))
-        act_res = self.act(self.act_proj(xz))
-
-        # x = self.in_lif(self.in_bn(self.in_proj(x)))
-        xz = self.in_proj(xz).view(B, L*2, C)
-        # x = self.in_bn(x)
-        # x = self.in_lif(x)
-        xz = xz.view(B, H*2, W, C)
-
-
-
-        xz = self.act(self.dwc(xz.permute(0, 3, 1, 2))).permute(0, 2, 3, 1).view(B, L*2, C)
-        xf,xb = xz.chunk(2,dim=1)
-        # Linear Attention
-        xf = self.attn(xf)
-        xb = self.attn(xb)
-        # 
-        xz = torch.cat([xf, xb.flip(1)], dim=1)
-
-        # x = self.out_lif(self.out_bn(self.out_proj(x * act_res)))
-        
-        xz = self.out_proj(xz * act_res)
         # x = self.out_bn(x)
         # x = self.out_lif(x)
         xz = self.dim2(xz.permute(0,2,1)).permute(0, 2,1)
+        xz = torch.cat([cls_token, xz], dim=1)
         xz = shortcut + self.drop_path(xz)
-        xz = x + self.cpe2(xz.reshape(B, H, W, C).permute(0, 3, 1, 2)).flatten(2).permute(0, 2, 1)
+
+        cls_token = xz[:, 0:1, :]
+
+        xz = torch.cat([cls_token, xz], dim=1)
 
         # FFN
         xz = xz + self.drop_path(self.mlp(self.norm2(xz)))
-        
         return xz
 
     def extra_repr(self) -> str:
