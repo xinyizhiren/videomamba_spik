@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-
+import os
 from torch import Tensor
 from typing import Optional
 
@@ -22,34 +22,40 @@ from einops import rearrange
 # os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 __all__ = ['spikformer']
 
+
+
 class MLP(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, drop=0.):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
-        self.fc1_conv = nn.Conv1d(in_features, hidden_features, kernel_size=1, stride=1)
-        # self.fc1_bn = nn.BatchNorm1d(hidden_features)
-        # self.fc1_lif = MultiStepLIFNode(tau=2.0, detach_reset=True, backend='torch')
+        # self.fc1 = linear_unit(in_features, hidden_features)
+        self.fc1_conv = nn.Conv2d(in_features, hidden_features, kernel_size=3, stride=1, padding=1)
+        self.fc1_bn = nn.BatchNorm2d(hidden_features)
+        self.fc1_lif = MultiStepLIFNode(tau=2.0, detach_reset=True, backend='torch')
 
-        self.fc2_conv = nn.Conv1d(hidden_features, out_features, kernel_size=1, stride=1)
-        # self.fc2_bn = nn.BatchNorm1d(out_features)
-        # self.fc2_lif = MultiStepLIFNode(tau=2.0, detach_reset=True, backend='torch')
+        # self.fc2 = linear_unit(hidden_features, out_features)
+        self.fc2_conv = nn.Conv2d(hidden_features, out_features, kernel_size=3, stride=1, padding=1)
+        self.fc2_bn = nn.BatchNorm2d(out_features)
+        self.fc2_lif = MultiStepLIFNode(tau=2.0, detach_reset=True, backend='torch')
+        # self.drop = nn.Dropout(0.1)
+
         self.c_hidden = hidden_features
         self.c_output = out_features
     def forward(self, x):
-        T,B,C,N = x.shape
+        T,B,C,W,H = x.shape
         x = self.fc1_conv(x.flatten(0,1))
-        x = self.fc1_bn(x).reshape(T,B,self.c_hidden,N).contiguous()
-        # x = self.fc1_lif(x)
+        x = self.fc1_bn(x).reshape(T,B,self.c_hidden,W,H).contiguous()
+        x = self.fc1_lif(x)
 
         x = self.fc2_conv(x.flatten(0,1))
-        x = self.fc2_bn(x).reshape(T,B,C,N).contiguous()
-        # x = self.fc2_lif(x)
+        x = self.fc2_bn(x).reshape(T,B,C,W,H).contiguous()
+        x = self.fc2_lif(x)
         return x
 
 class SSM_Block(nn.Module):
     def __init__(
-        self, dim, mixer_cls, norm_cls=nn.LayerNorm, fused_add_norm=False, residual_in_fp32=False,drop_path=0.,
+        self, dim, mixer_cls, drop_path=0.,mlp_ratio=4., time_steps=32
     ):
         """
         Simple block wrapping a mixer class with LayerNorm/RMSNorm and residual connection"
@@ -64,27 +70,14 @@ class SSM_Block(nn.Module):
         The residual needs to be provided (except for the very first block).
         """
         super().__init__()
-        self.residual_in_fp32 = residual_in_fp32
-        self.fused_add_norm = fused_add_norm
+        self.T = time_steps
         self.mixer = mixer_cls(dim)
-        self.norm = norm_cls(dim)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        #if self.fused_add_norm:
-        #    assert RMSNorm is not None, "RMSNorm import fails"
-        #    assert isinstance(
-        #        self.norm, (nn.LayerNorm, RMSNorm)
-        #    ), "Only LayerNorm and RMSNorm are supported for fused_add_norm"
-        
-        if self.fused_add_norm:
-        # 去掉对RMSNorm存在性的强制检查，只验证当前norm的类型
-            assert isinstance(
-                self.norm, (nn.LayerNorm,)  # 只保留LayerNorm（如果确实不用RMSNorm）
-            ), "Only LayerNorm is supported for fused_add_norm"
-
+        mlp_hidden_dim = int(dim * mlp_ratio)
+        self.mlp = MLP(in_features= dim, hidden_features=mlp_hidden_dim)
 
     def forward(
-        self, hidden_states: Tensor, residual: Optional[Tensor] = None, inference_params=None,
-        use_checkpoint=False
+        self, x: Tensor, inference_params=None, use_checkpoint=False
     ):
         r"""Pass the input through the encoder layer.
 
@@ -92,50 +85,123 @@ class SSM_Block(nn.Module):
             hidden_states: the sequence to the encoder layer (required).
             residual: hidden_states = Mixer(LN(residual))
         """
-        hidden_states.shape
-        if not self.fused_add_norm:
-            residual = (residual + self.drop_path(hidden_states)) if residual is not None else hidden_states
-            hidden_states = self.norm(residual.to(dtype=self.norm.weight.dtype))
-            if self.residual_in_fp32:
-                residual = residual.to(torch.float32)
-        else:
-            #fused_add_norm_fn = rms_norm_fn if isinstance(self.norm, RMSNorm) else layer_norm_fn
-            fused_add_norm_fn = layer_norm_fn
-            hidden_states, residual = fused_add_norm_fn(
-                hidden_states if residual is None else self.drop_path(hidden_states),
-                self.norm.weight,
-                self.norm.bias,
-                residual=residual,
-                prenorm=True,
-                residual_in_fp32=self.residual_in_fp32,
-                eps=self.norm.eps,
-            ) # hidden_states [1, 1569, 576]
+        #输入为脉冲形式数据 shape:[B, T*N, C]
+        # 通过 mixer 处理 
+        T, B, C, H, W = x.shape
+        x = x.permute(1, 0, 3, 4, 2).reshape(B, T*H*W, C)  # [B, T*N, C]
         if use_checkpoint:
-            hidden_states = checkpoint.checkpoint(self.mixer, hidden_states, inference_params)
+            x = x + checkpoint.checkpoint(self.mixer, x, inference_params)
         else:
-            hidden_states = self.mixer(hidden_states, inference_params=inference_params)
-        hidden_states.shape
-        return hidden_states, residual
+            x = x + self.mixer(x, inference_params=inference_params)
+
+        # [T, B, C, H, W]
+        B, TN, C = x.shape
+        N = TN // self.T
+        H = W = int((N) ** 0.5)
+        x = x.reshape(B, self.T, H*W, C).permute(1, 0, 3, 2).reshape(self.T, B, C, H, W).contiguous()
+        x = x + self.mlp(x)
+
+        return x
+    
 
     def allocate_inference_cache(self, batch_size, max_seqlen, dtype=None, **kwargs):
         return self.mixer.allocate_inference_cache(batch_size, max_seqlen, dtype=dtype, **kwargs)
+    
+class PatchEmbeding(nn.Module):
+    def __init__(self, in_channels=256, out_channels=512, expansion=4, mode='init'):
+        super().__init__()
+        self.mode = mode
+        self.expansion = expansion
+        self.out_channels = out_channels
+        expanded_channels = in_channels * expansion if mode == 'init' else None
+        # 中间通道数（init模式：扩展后//2；stage模式：直接用out_channels）
+        mid_channels = expanded_channels // 2 if mode == 'init' else out_channels
 
-# class Block(nn.Module):
-#     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-#                  drop_path=0., norm_layer=nn.LayerNorm, sr_ratio=1):
-#         super().__init__()
-#         self.norm1 = norm_layer(dim)
-#         self.attn = SSA(dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
-#                               attn_drop=attn_drop, proj_drop=drop, sr_ratio=sr_ratio)
-#         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-#         self.norm2 = norm_layer(dim)
-#         mlp_hidden_dim = int(dim * mlp_ratio)
-#         self.mlp = MLP(in_features=dim, hidden_features=mlp_hidden_dim, drop=drop)
+        # 阶段1：通道扩展 + 多卷积核学习 + 最大池化（非下采样）
+        # 用多个卷积核增加特征学习的灵活性
+        if mode == 'init':
+            self.expand_conv1 = nn.Conv2d(in_channels, expanded_channels//2, 3, 1, 1, bias=False)
+            self.expand_conv2 = nn.Conv2d(in_channels, expanded_channels//2, 5, 1, 2, bias=False)  # 5×5卷积补充感受野
+            self.expand_bn = nn.BatchNorm2d(expanded_channels)
+            self.pool = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)  # 非下采样池化（16×16保持）
+            self.expand_lif = MultiStepLIFNode(tau=2.0, detach_reset=True, backend='torch')
 
-#     def forward(self, x):
-#         x = x + self.attn(x)
-#         x = x + (self.mlp(x))
-#         return x
+        # 阶段2：中间过渡 + 池化筛选
+        mid_in_channels = expanded_channels if mode == 'init' else in_channels
+        self.mid_conv = nn.Conv2d(mid_in_channels, mid_channels, 3, 1, 1, bias=False)
+        self.mid_bn = nn.BatchNorm2d(mid_channels)
+        self.mid_pool = nn.MaxPool2d(kernel_size=3, stride=1 if mode == 'init' else 2, padding=1)  # 再次筛选强特征
+        self.mid_lif = MultiStepLIFNode(tau=2.0, detach_reset=True, backend='torch')
+
+        # 阶段3：通道缩减
+        self.shrink_conv = nn.Conv2d(mid_channels, out_channels, 3, 1, 1, bias=False)
+        self.shrink_bn = nn.BatchNorm2d(out_channels)
+        self.shrink_lif = MultiStepLIFNode(tau=2.0, detach_reset=True, backend='torch')
+
+        # 残差路径：直接保留输入浮点数特征（轻度调整通道）
+        if mode == 'init':
+            # init模式残差：从扩展后通道→out_channels（保持空间）
+            self.res_conv = nn.Conv2d(mid_in_channels, out_channels, 1, 1, 0, bias=False)
+        else:
+            # stage模式残差：从输入通道→out_channels（同步下采样stride=2）
+            self.res_conv = nn.Conv2d(mid_in_channels, out_channels, 1, 2, 0, bias=False)
+        self.res_bn = nn.BatchNorm2d(out_channels)
+        # 残差路径不经过脉冲层，直接保留浮点数特征（关键！避免原始信息被脉冲化丢失）
+        self.res_lif = MultiStepLIFNode(tau=2.0, detach_reset=True, backend='torch')  
+
+    def forward(self, x):
+        # 输入x：[T, B, 256, 16, 16]（浮点数特征）
+        T, B, C, H, W = x.shape
+        x = x.flatten(0, 1).contiguous()  # [T*B, 256, 16, 16]
+        x_flat = x  # 保留原始输入用于残差路径
+        # 主路径：多卷积学习→池化筛选→过渡→再筛选→缩减
+        # 阶段1：多卷积核学习不同特征，拼接后扩展通道
+        if self.mode == 'init':
+            x1 = self.expand_conv1(x)  # [T*B, 512, 16, 16]（3×3卷积）
+            x2 = self.expand_conv2(x)  # [T*B, 512, 16, 16]（5×5卷积）
+            x = torch.cat([x1, x2], dim=1)  # 拼接为1024通道：[T*B, 1024, 16, 16]
+            x = self.expand_bn(x)
+            x = self.pool(x)  # 局部取最大值，保留强特征：[T*B, 1024, 16, 16]
+            x = x.reshape(T, B, -1, H, W).contiguous()  # 恢复时序维度
+            x = self.expand_lif(x)  # 转换为脉冲数据（第一次脉冲化）
+            x = x.flatten(0, 1).contiguous()
+            x_feat = x # [T*B, 256, 16, 16]           
+
+        # 阶段2：中间过渡+再筛选
+        x.shape
+        x = self.mid_conv(x)  # [T*B, mid_channels, 16, 16]
+        x = self.mid_bn(x)
+        x = self.mid_pool(x)  # 再次筛选强脉冲特征
+        new_H = H if self.mode == 'init' else H//2
+        new_W = W if self.mode == 'init' else W//2
+        x = x.reshape(T, B, -1, new_H, new_W).contiguous()
+        x = self.mid_lif(x)  # 第二次脉冲化
+        x = x.flatten(0, 1).contiguous()
+
+        # 阶段3：缩减到目标通道
+        x = self.shrink_conv(x)  # [T*B, 512, 16, 16]
+        x = self.shrink_bn(x)
+        x = x.reshape(T, B, -1, new_H, new_W).contiguous()
+        x = self.shrink_lif(x)  # 最终脉冲数据
+
+        print(x_flat.shape)
+        # 残差路径：保留原始浮点数特征（不经过脉冲层）
+        if self.mode == 'init':
+            # init模式：用扩展后的特征做残差（保持空间）
+            x_res = self.res_conv(x_feat)
+        else:
+            # stage模式：用原始输入做残差（同步下采样）
+            x_res = self.res_conv(x_flat)  # 用原始x_flat（未扩展）
+        x_res = self.res_bn(x_res).reshape(T, B, -1, new_H, new_W).contiguous()
+        x_res = self.res_lif(x_res)
+        
+        # 残差连接
+        print(x.shape)
+        print(x_res.shape)
+        x = x + x_res 
+
+        return x
+    
 
 class PatchEmbed(nn.Module):
     """ Image to Patch Embedding
@@ -170,7 +236,6 @@ class PatchEmbed(nn.Module):
         x = self.proj_linear(x)
         x = self.dropout(x)
         return x
-
 
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
@@ -269,7 +334,6 @@ class LinearAttention(nn.Module):
         self.input_resolution = input_resolution
         self.num_heads = num_heads
         self.qk = nn.Linear(dim, dim * 2, bias=qkv_bias)
-        print(f"dim={dim}, 2*dim={2*dim}")
         self.qk_bn = nn.LayerNorm(2 * dim) 
         self.qk_lif = MultiStepLIFNode(tau=2.0, detach_reset=True, backend='torch')
 
@@ -628,29 +692,22 @@ class Stem(nn.Module):
 def create_block(
     d_model,
     ssm_cfg=None,
-    norm_epsilon=1e-5,
     drop_path=0.,
-    rms_norm=True,
-    residual_in_fp32=True,
-    fused_add_norm=False,
     layer_idx=None,
-    bimamba=True,
     device=None,
     dtype=None,
+    mlp_ratio=4.0,
 ):
     factory_kwargs = {"device": device, "dtype": dtype}
     if ssm_cfg is None:
         ssm_cfg = {}
     mixer_cls = partial(Mamba, layer_idx=layer_idx, **ssm_cfg, **factory_kwargs)
     #norm_cls = partial(nn.LayerNorm if not rms_norm else RMSNorm, eps=norm_epsilon)
-    norm_cls = partial(nn.LayerNorm, eps=norm_epsilon)
     block = SSM_Block(
-        d_model,
+        d_model, 
         mixer_cls,
-        norm_cls=norm_cls,
         drop_path=drop_path,
-        fused_add_norm=fused_add_norm,
-        residual_in_fp32=residual_in_fp32,
+        mlp_ratio=mlp_ratio,
     )
     block.layer_idx = layer_idx
     return block
@@ -868,10 +925,10 @@ class MinusRbfHSIC(RbfHSIC):
 
 # 方法二
 class Uncertain():
-    def __init__(self, alpha):
+    def __init__(self, alpha, num_classes=10):
         super().__init__()
         self.views = 2
-        self.num_classes = 10 # 记得修改类别数
+        self.num_classes = num_classes # 记得修改类别数
         self.alpha = alpha # alpha shape: [batch_size, 2, num_classes]
 
 
@@ -891,71 +948,30 @@ class Uncertain():
         # alpha = self.alpha + 1  # 确保 alpha 不小于 1
         return self.DS_Combin_two()   # ？self.DS_Combin_two()？
 
-def GAP(r1, r2, alpha):
+def GAP(r1, r2, alpha, num_classes=10):
     """
     r1: [batch_size, feature_dim]
     r2: [batch_size, feature_dim]
     alpha: [batch_size, 2, num_classes]
     """
-    u = Uncertain(alpha).compute_u()  # [batch_size, 2, 1]
+    u = Uncertain(alpha=alpha, num_classes=num_classes).compute_u()  # [batch_size, 2, 1]
 
     u1 = u[:, 0, :]  # [batch_size, 1]
     u2 = u[:, 1, :]  # [batch_size, 1]
     sum_u = 2 - (u1 + u2)  # [batch_size, 1]
-    # print("sum_u shape:", sum_u.shape)
-    # print("sum_u value:", sum_u)
 
     # 计算系数
     coeff1 = (1 - u1) / sum_u  # [batch_size, 1]
     coeff2 = (1 - u2) / sum_u  # [batch_size, 1]
-
-    # 打印系数的形状和值
-    # print("coeff1 shape:", coeff1.shape)
-    # print("coeff1 value:", coeff1)
-    # print("coeff2 shape:", coeff2.shape)
-    # print("coeff2 value:", coeff2)
 
     # 计算最终融合特征
     r = coeff1 * r1 + coeff2 * r2  # [batch_size, feature_dim]
     # r shape: torch.Size([8, 384])
     # print("r shape:", r.shape)
-    return r
+    fused_alpha = F.softplus(r) + 1
+    fused_uncertain = Uncertain(alpha=fused_alpha, num_classes=num_classes).compute_u()
+    return r, u1, u2, fused_uncertain
 
-# 方法三对应
-class Uncertain3(nn.Module):
-    def __init__(self, embed_dim):
-        super().__init__()
-        self.views = 2
-        self.embed_dim = embed_dim  # 使用特征维度代替 num_classes
-
-    def compute_u(self, features):
-        # features: [batch_size, 2, embed_dim]
-        # 将特征值转为非负（例如取绝对值或 softplus）
-        features = F.softplus(features)  # 确保非负
-        S = torch.sum(features, dim=-1, keepdim=True) + 1e-10  # [batch_size, 2, 1]
-        u = self.embed_dim / S  # 不确定性，[batch_size, 2, 1]
-        return u
-
-def GAP3(r1, r2, features):
-    """
-    r1: [batch_size, embed_dim]
-    r2: [batch_size, embed_dim]
-    features: [batch_size, 2, embed_dim] (features_view1 和 features_view2 堆叠)
-    """
-    uncertain = Uncertain3(r1.shape[-1])  # embed_dim 作为参数
-    u = uncertain.compute_u(features)  # [batch_size, 2, 1]
-
-    u1 = u[:, 0, :]  # [batch_size, 1]
-    u2 = u[:, 1, :]  # [batch_size, 1]
-    sum_u = 2 - (u1 + u2)  # [batch_size, 1]
-
-    # 计算系数
-    coeff1 = (1 - u1) / sum_u  # [batch_size, 1]
-    coeff2 = (1 - u2) / sum_u  # [batch_size, 1]
-
-    # 融合特征
-    r = coeff1 * r1 + coeff2 * r2  # [batch_size, embed_dim]
-    return r
 
 # 方法四
 from math import log2
@@ -1140,8 +1156,6 @@ class SpatialBranch(nn.Module):
             )
             self.layers.append(layer)
 
-        # 空间分支输出投影
-        self.proj = nn.Linear(embed_dims, embed_dims)
 
     def forward(self, x):
         # x形状: [B, C, T, H, W]    
@@ -1165,12 +1179,11 @@ class SpatialBranch(nn.Module):
         for layer in self.layers:   
             x = layer(x)
         # 恢复批次维度并投影
-        x = x.reshape(-1, self.batch_size, x.shape[1], x.shape[2]).mean(0)  # 时间维度平均 [B, N, C]
-        return self.proj(x)
+        return x
 
 class TemporalBranch(nn.Module):
-    def __init__(self, img_size=128, patch_size=8, in_chans=3, embed_dims=256,
-                 num_frames=16, num_classes=300, ssm_embed_dims=256, batch_size=8,
+    def __init__(self, img_size=128, patch_size=8, in_chans=3, embed_dims=256, layer_nums=[8, 4, 2],
+                 num_frames=16, ssm_embed_dims=256, batch_size=8, T=4,mlp_ratio=4.0, expansion=4, embed_ratio=4,
                  rms_norm=True, residual_in_fp32=True, fused_add_norm=False, bimamba=True):
         super().__init__()
         # 时间分支主要处理时序信息，复用原有PatchEmbed和Mamba模块
@@ -1182,6 +1195,9 @@ class TemporalBranch(nn.Module):
         )
 
         self.batch_size = batch_size
+        self.patch_size = patch_size
+        self.img_size = img_size
+        self.time_steps = T
         # Mamba配置
         self.ssm_embed_dims = ssm_embed_dims
         self.num_frames = num_frames
@@ -1189,38 +1205,50 @@ class TemporalBranch(nn.Module):
         ssm_inter_dpr = [0.0] + ssm_dpr
         factory_kwargs = {"device": None, "dtype": None}
 
+        self.spatial_size = img_size//patch_size
+
+        self.patch_embed1 = PatchEmbeding(in_channels=embed_dims, out_channels=embed_dims*2, expansion=expansion, mode='init')
         # 构建Mamba层
-        self.mamba_layers = nn.ModuleList(
+        self.mamba_layers1 = nn.ModuleList(
             [
                 create_block(
-                    ssm_embed_dims,
-                    ssm_cfg=None,
-                    norm_epsilon=1e-5,
-                    rms_norm=rms_norm,
-                    residual_in_fp32=residual_in_fp32,
-                    fused_add_norm=fused_add_norm,
-                    layer_idx=i,
-                    bimamba=bimamba,
-                    drop_path=ssm_inter_dpr[i],
-                    **factory_kwargs,
-                )
-                for i in range(1)  # 保持1层Mamba
+                    d_model=ssm_embed_dims*2,ssm_cfg=None,layer_idx=i,
+                    drop_path=ssm_inter_dpr[i],mlp_ratio=mlp_ratio,**factory_kwargs,)
+                for i in range(layer_nums[0])  # 保持1层Mamba
             ]
         )
-
+        
+        #[T, B, C, H, W]
+        self.patch_embed2 = PatchEmbeding(in_channels=embed_dims*2, out_channels=embed_dims*2, expansion=embed_ratio, mode='stage')
+        self.mamba_layers2 = nn.ModuleList(
+            [
+                create_block(
+                    d_model=ssm_embed_dims*2,ssm_cfg=None,layer_idx=i,
+                    drop_path=ssm_inter_dpr[i],mlp_ratio=mlp_ratio,**factory_kwargs,
+                )
+                for i in range(layer_nums[1])  # 保持2层Mamba
+            ]
+        )
+        
+        self.patch_embed3 = PatchEmbeding(in_channels=embed_dims*4, out_channels=embed_dims*2, expansion=embed_ratio, mode='stage')
+        self.mamba_layers3 = nn.ModuleList(
+            [
+                create_block(
+                    d_model=ssm_embed_dims*2,ssm_cfg=None,layer_idx=i,
+                    drop_path=ssm_inter_dpr[i],mlp_ratio=mlp_ratio,**factory_kwargs,
+                )
+                for i in range(layer_nums[2])  # 保持3层Mamba
+            ]
+        )
+        
         #self.norm_f = (nn.LayerNorm if not rms_norm else RMSNorm)(ssm_embed_dims, eps=1e-5)
         # 直接使用 nn.LayerNorm，不再考虑 rms_norm 参数
         self.norm_f = nn.LayerNorm(ssm_embed_dims, eps=1e-5)
-        self.drop_path = DropPath(0.1) if 0.1 > 0. else nn.Identity()
-        self.residual_in_fp32 = residual_in_fp32
-        self.fused_add_norm = fused_add_norm
 
-        # 时间分支输出投影
-        self.proj = nn.Linear(ssm_embed_dims, ssm_embed_dims)
 
     def forward(self, x, inference_params=None):
         # x形状: [B, C, T, H, W]
-        x = self.patch_embed(x)  # 经过PatchEmbed处理 [B*T, N, C]
+        x = self.patch_embed(x)  # 经过PatchEmbed处理 [B*T, N, C]  这个可能还是要修改，先不管
         BT ,N , C = x.shape
         x = x.view(self.batch_size, self.num_frames, N, C).flatten(1, 2) # [B, T*N, C]
         x.shape
@@ -1228,33 +1256,58 @@ class TemporalBranch(nn.Module):
         temporal_pos_emb = self._get_temporal_pos_emb(self.batch_size, x.shape[1])
         temporal_pos_emb.shape
         x = x + temporal_pos_emb
-        
-        # 经过Mamba层
-        residual = None
-        hidden_states = x  # 恢复批次维度 [B, T*N, C]
+        T = BT // self.batch_size
+        x = x.view(self.batch_size, T, N, C)
 
-        for layer in self.mamba_layers:
-            hidden_states, residual = layer(
-                hidden_states, residual, inference_params=inference_params
-            )
 
-        # 最终归一化
-        if not self.fused_add_norm:
-            residual = residual + self.drop_path(hidden_states) if residual is not None else hidden_states
-            hidden_states = self.norm_f(residual.to(dtype=self.norm_f.weight.dtype))
-        else:
-            fused_add_norm_fn = rms_norm_fn if isinstance(self.norm_f, RMSNorm) else layer_norm_fn
-            hidden_states = fused_add_norm_fn(
-                self.drop_path(hidden_states),
-                self.norm_f.weight,
-                self.norm_f.bias,
-                eps=self.norm_f.eps,
-                residual=residual,
-                prenorm=False,
-                residual_in_fp32=self.residual_in_fp32,
-            )
+        #  [B, T*N, C]
+        #x_reversed= x.reshape(self.batch_size, -1, C).flip(dims=[1])  # -1 自动计算 T*N（= 原T × 原N）
+        #x_reversed = x_reversed.reshape(self.batch_size, T, N, C)
 
-        return self.proj(hidden_states)
+        # [B, T, time_steps, N, C]
+        x = x.unsqueeze(2).repeat(1, 1, self.time_steps, 1, 1)  # unsqueeze 插入 time_steps 维度，repeat 复制
+        #x_reversed = x_reversed.unsqueeze(2).repeat(1, 1, self.time_steps, 1, 1)
+
+
+        # [T*time_steps,B, C, N]
+        x = x.flatten(1, 2).permute(1, 0, 3, 2)  
+        #x_reversed = x_reversed.flatten(1, 2).permute(1, 0, 3, 2)
+        x.shape
+        H = W = self.img_size // self.patch_size
+        T, B, C, N = x.shape
+        x = x.view(T, B, C, H, W)  # [T*time_steps, B, C, H, W]
+        #x_reversed = x_reversed.view(T, B, C, H, W)
+
+
+
+        # 这里变成脉冲数据，这一步很重要，因为这一步会损失大量信息，要保证损失的信息都是冗余信息,或者不重要的信息。 [T*time_steps, B, C, H, W]
+        x = self.patch_embed1(x)
+        #x_reversed = self.patch_embed1(x_reversed)          #这里不太对，如果图像patch也逆序了，模块可能难以拟合
+        T, B, C, H, W = x.shape
+        x_reversed = x.permute(1, 0, 3, 4, 2).reshape(B, T*H*W, C).flip(dims=[1])  #这里是对T*N维度取反序，后面可以尝试一下仅对T维度取反序的效果
+        x_reversed = x_reversed.reshape(B, T, H, W, C).permute(1, 0, 4, 2, 3)  # [T*time_steps, B, C, H, W]
+ 
+        # 经过Mamba层  输入输出为：[T, B, C, H, W]
+        #检查维度 关注特征融合
+        for layer in self.mamba_layers1:
+            x = layer(x, inference_params=inference_params)
+            x_reversed = layer(x_reversed, inference_params=inference_params)
+
+        x = self.patch_embed2(x)  # [T*time_steps, B, C, H, W]
+        x_reversed = self.patch_embed2(x_reversed)  # [T*time_steps, B, C, H, W]
+
+        for layer in self.mamba_layers2:
+            x = layer(x, inference_params=inference_params)
+            x_reversed = layer(x_reversed, inference_params=inference_params)
+
+        x_concat = torch.cat([x, x_reversed], dim=-1)
+        x = self.patch_embed3(x_concat)  # [T*time_steps, B, C, H, W]
+
+        for layer in self.mamba_layers3:
+            x = layer(x, inference_params=inference_params)
+
+        print(x.shape)
+        return x.flatten(3).permute(1, 0, 3, 2).mean(dim=2)  # [B, T, C]
 
     def _get_temporal_pos_emb(self, B, N):
         # 生成时序位置嵌入 [B, N, C]
@@ -1330,16 +1383,13 @@ class DualStreamSpikMamba(nn.Module):
         B, C, T, H, W = x.shape
 
         # 1. 提取分支特征
-        # 空间分支输入: [B, C, T, H, W] → 输出: [B, T, N, C1=embed_dims]
+        # 空间分支输入: [B, C, T, H, W] → 输出: [B*T,N+1,  C1=embed_dims] 输出包含全局特征的CLS向量
         spatial_feat = self.spatial_branch(x)
 
-        # 时间分支输入: [B, C, T, H, W] → 输出: [B, T, N, C2=ssm_embed_dims]
+        # 时间分支输入: [B, C, T, H, W] → 输出: [B, T*N, C2=ssm_embed_dims]
         temporal_feat = self.temporal_branch(x)
 
-        # 2. 时空合并 # [B, T*N, C1=embed_dims]
-        spatial_feat = spatial_feat.flatten(1, 2)  
-        temporal_feat = temporal_feat.flatten(1, 2) 
-
+ 
         # 3. 交叉注意力融合（时间特征Query → 空间特征Key/Value）
         # 归一化
         query = self.temporal_norm(temporal_feat)  # [B, T*N, C2=ssm_embed_dims]
@@ -1366,6 +1416,87 @@ class DualStreamSpikMamba(nn.Module):
         # print("features_view1 shape:",features_view1.shape)
         return features_view1
 
+class SpikMamba(nn.Module):
+    def __init__(self, img_size_h=128, img_size_w=128, patch_size=8, in_channels=3, num_heads=8, qkv_bias=True,
+                 num_classes=300, rms_norm=True, residual_in_fp32=True, embed_dims=256,mlp_ratios=4.0,depths=2,
+                 fused_add_norm=False, bimamba=True, norm_layer=partial(nn.LayerNorm, eps=1e-6),sr_ratios=1,
+                 num_frames=16, batch_size=8, sigma_x=1.0, sigma_y=None, T=4):
+        super().__init__()
+
+        # 仅保留时间分支
+        self.batch_size = batch_size
+        self.num_frames = num_frames
+        self.embed_dims = embed_dims
+        self.temporal_branch = TemporalBranch(
+            img_size=img_size_h, patch_size=patch_size, in_chans=in_channels,
+            embed_dims=embed_dims,  # 直接使用ssm_embed_dims作为基础维度
+            num_frames=num_frames, T=4, mlp_ratio=mlp_ratios,
+            ssm_embed_dims=embed_dims, rms_norm=rms_norm, residual_in_fp32=residual_in_fp32,
+            fused_add_norm=fused_add_norm, bimamba=bimamba, batch_size=batch_size
+        )
+
+        # 特征后处理
+        self.head_drop = nn.Dropout(0.2)  # 增加dropout提升鲁棒性s  应当修改为通过参数控制
+        self.classifier = nn.Linear(embed_dims*num_frames*T*2, num_classes)  # 分类头（生成原始证据）
+
+        # 多视角融合与约束组件（直接调用已定义的类）
+        self.hsic_criterion = MinusRbfHSIC(sigma_x=sigma_x, sigma_y=sigma_y, algorithm='unbiased')  # HSIC损失实例
+        self.auto_sigma = True  # 自动初始化HSIC的sigma
+        self.num_classes = num_classes
+
+        #self.apply(self._init_weights)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=.02)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+
+
+    def _init_hsic_sigma(self, feat):
+        """用输入特征初始化HSIC的sigma参数（基于特征标准差）"""
+        with torch.no_grad():
+            self.hsic_criterion.sigma = torch.std(feat).item() * 2  # 自适应设置带宽
+
+    def forward_features(self, x):
+        """提取特征并生成分类logits（原始证据）"""
+        feat = self.temporal_branch(x) # [B, T, C]
+        B, T, C = feat.shape
+        logits = self.classifier(self.head_drop(feat.view(B, T*C)))  # [B, num_classes]（原始证据）
+        return logits, feat  # 返回logits和特征（用于融合和HSIC）
+
+    def forward(self, x1, x2=None, inference_params=None, hsic=False):
+        # 单视角处理
+        if x2 is None:
+            logits, _ = self.forward_features(x1)
+            return logits
+
+        # 双视角处理
+        logits1, feat1 = self.forward_features(x1)  # 视角1：logits+特征
+        logits2, feat2 = self.forward_features(x2)  # 视角2：logits+特征
+
+        # 生成证据（非负化）
+        alpha1 = F.softplus(logits1)  # [B, num_classes]
+        alpha2 = F.softplus(logits2)  # [B, num_classes]
+
+        # 1. GAP融合（调用已定义的GAP函数）
+        alphas = torch.stack([alpha1 + 1, alpha2 + 1], dim=1)  # [B, 2, num_classes]
+        fused_logits, uncertain1, uncertain2, fused_uncertain = GAP(logits1, logits2, alphas, self.num_classes)  # 融合后的logits
+
+        # 3. HSIC损失（训练阶段约束视角一致性）
+        if hsic:
+            # 自动初始化HSIC的sigma（首次调用时）
+            if self.auto_sigma and self.hsic_criterion.sigma == 1.0:
+                self._init_hsic_sigma(feat1)
+            loss_hsic = self.hsic_criterion(feat1, feat2)  # 计算两视角特征的HSIC
+            return fused_logits, loss_hsic, (alpha1, alpha2), (uncertain1, uncertain2, fused_uncertain)
+        else:
+            # 推理阶段返回融合结果、证据和不确定性
+            return fused_logits, (alpha1, alpha2), (uncertain1, uncertain2, fused_uncertain)
+
 # 注册模型
 @register_model
 def dual_stream_spikmamba(pretrained=False, **kwargs):
@@ -1378,7 +1509,17 @@ def dual_stream_spikmamba(pretrained=False, **kwargs):
     model.default_cfg = _cfg()
     return model
 
-
+# 注册模型
+@register_model
+def spikmamba(pretrained=False, **kwargs):
+    model = SpikMamba(
+        img_size_h=128, img_size_w=128, patch_size=8, embed_dims=256,
+        num_heads=8, mlp_ratios=4.0, in_channels=3, num_classes=300,
+        qkv_bias=True, num_frames=16, norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        depths=2, sr_ratios=1, ssm_embed_dims=256, **kwargs
+    )
+    model.default_cfg = _cfg()
+    return model
 
 
 # 测试代码
@@ -1391,13 +1532,20 @@ if __name__ == '__main__':
     import os
     import os
 
-    model = DualStreamSpikMamba(
-        img_size_h=128, img_size_w=128, patch_size=8, embed_dims=256,
-        num_heads=8, mlp_ratios=4.0, in_channels=3, num_classes=300,batch_size=8,
-        qkv_bias=True, num_frames=16, depths=2, sr_ratios=1, norm_layer=partial(nn.LayerNorm, eps=1e-6)
+
+    #model = DualStreamSpikMamba(
+    #    img_size_h=128, img_size_w=128, patch_size=8, embed_dims=256,
+    #    num_heads=8, mlp_ratios=4.0, in_channels=3, num_classes=300,batch_size=8,
+    #    qkv_bias=True, num_frames=16, depths=2, sr_ratios=1, norm_layer=partial(nn.LayerNorm, eps=1e-6)
+    #).cuda()
+
+    model = SpikMamba(
+        img_size_h=128, img_size_w=128, patch_size=8, embed_dims=256, T = 4,
+        num_heads=8, mlp_ratios=4.0, in_channels=3, num_classes=300,batch_size=2,
+        qkv_bias=True, num_frames=8, depths=2, sr_ratios=1, norm_layer=partial(nn.LayerNorm, eps=1e-6)
     ).cuda()
 
-    input_tensor1 = torch.randn(8, 3, 16, 128, 128).cuda()  # [B, C, T, H, W]
-    input_tensor2 = torch.randn(8, 3, 16, 128, 128).cuda()  # [B, C, T, H, W]
-    output = model(input_tensor1, input_tensor2)
-    print(f"Output shape: {output.shape}")  # 应为 [16, 300]
+    input_tensor1 = torch.randn(2, 3, 8, 128, 128).cuda()  # [B, C, T, H, W]
+    input_tensor2 = torch.randn(2, 3, 8, 128, 128).cuda()  # [B, C, T, H, W]
+    output, _, _ = model(input_tensor1, input_tensor2)
+    print(f"Output : {output}")  
