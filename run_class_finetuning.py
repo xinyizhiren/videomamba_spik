@@ -351,6 +351,19 @@ def main(args, ds_init):
             use_checkpoint=args.use_checkpoint,
             checkpoint_num=args.checkpoint_num,
         )
+    elif 'spikmamba' in args.model:
+        model = create_model(
+            args.model,
+            img_size=args.input_size,
+            pretrained=False if args.finetune else True,
+            num_classes=args.nb_classes,
+            fc_drop_rate=args.fc_drop_rate,
+            drop_path_rate=args.drop_path,
+            kernel_size=args.tubelet_size,
+            num_frames=args.num_frames,
+            use_checkpoint=args.use_checkpoint,
+            checkpoint_num=args.checkpoint_num,
+        )
     else:
         model = create_model(
             args.model,

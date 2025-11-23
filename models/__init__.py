@@ -21,6 +21,10 @@ from .videomamba_spik import (
     videomamba_middle, 
 )
 
+from .videomamba_spik_baseline_1 import (
+    spikmamba,
+)
+
 from .videomamba_pretrain import (
     videomamba_middle_pretrain
 )
