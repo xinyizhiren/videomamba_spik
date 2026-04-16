@@ -434,9 +434,12 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         loss_value = loss.item()
 
         # 分布式训练环境中检测损失值中的 NaN（非数字）和 Inf（无穷大）
-        loss_list = [torch.zeros_like(loss) for _ in range(dist.get_world_size())]
-        dist.all_gather(loss_list, loss)
-        loss_list = torch.tensor(loss_list)
+        if dist.is_available() and dist.is_initialized():
+            loss_list = [torch.zeros_like(loss) for _ in range(dist.get_world_size())]
+            dist.all_gather(loss_list, loss)
+            loss_list = torch.stack(loss_list)
+        else:
+            loss_list = torch.stack([loss.detach()])
         loss_list_isnan = torch.isnan(loss_list).any()
         loss_list_isinf = torch.isinf(loss_list).any()
 
