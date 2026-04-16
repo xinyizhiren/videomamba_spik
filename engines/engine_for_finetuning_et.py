@@ -95,10 +95,11 @@ def train_class_batch(model, samples_view1, samples_view2, target, criterion, cu
     # print(f"Current epoch: {cur_epoch}")
 
     outputs, alpha1, alpha2 = model(samples_view1, samples_view2)
+    num_classes = outputs.shape[-1]
     loss = criterion(outputs, target)
     #
-    lossnds1 = ce_loss(target, alpha1 + 1, 10, cur_epoch, 10) + \
-               ce_loss(target, alpha2 + 1, 10, cur_epoch, 10)
+    lossnds1 = ce_loss(target, alpha1 + 1, num_classes, cur_epoch, 10) + \
+               ce_loss(target, alpha2 + 1, num_classes, cur_epoch, 10)
     # c是类别
     # print(f"crossloss: {loss}")
     # print(f"5*lossnds1: {5 * lossnds1}")
