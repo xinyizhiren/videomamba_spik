@@ -242,8 +242,11 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
     past_frames_buffer = []  # 存储过去3帧的buffer
 
-    for data_iter_step, (samples_view1, samples_view2, targets, _,_,_) in enumerate(
+    for data_iter_step, batch in enumerate(
             metric_logger.log_every(data_loader, print_freq, header)):
+        samples_view1 = batch[0]
+        samples_view2 = batch[1]
+        targets = batch[2]
         step = data_iter_step // update_freq
         if step >= num_training_steps_per_epoch:
             continue

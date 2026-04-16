@@ -379,7 +379,7 @@ class VideoClsDataset_sparse(Dataset):
                 buffer_view1 = self._aug_frame(buffer_view1, args)
                 buffer_view2 = self._aug_frame(buffer_view2, args)
 
-            return buffer_view1, buffer_view2, self.label_array[index], index, {}
+            return buffer_view1, buffer_view2, self.label_array[index], index, index, {}
 
 
         elif self.mode == 'validation':
