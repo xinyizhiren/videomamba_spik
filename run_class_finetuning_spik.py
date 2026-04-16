@@ -18,13 +18,17 @@ from timm.utils import ModelEma
 from optim_factory import create_optimizer, get_parameter_groups, LayerDecayValueAssigner
 
 from datasets import build_dataset
-from engines.engine_for_finetuning import train_one_epoch, validation_one_epoch, final_test, merge
+from engines.engine_for_finetuning_spik import train_one_epoch, validation_one_epoch, final_test, merge
 from utils import NativeScalerWithGradNormCount as NativeScaler
 from utils import multiple_samples_collate
 import utils
 import contextlib
 from models import *
 
+import logging
+
+# 屏蔽 WARNING 级别的输出。
+logging.getLogger().setLevel(logging.ERROR) 
 
 def get_args():
     parser = argparse.ArgumentParser('VideoMAE fine-tuning and evaluation script for video classification', add_help=False)
@@ -248,6 +252,7 @@ def main(args, ds_init):
 
     cudnn.benchmark = True
 
+    #训练集、测试集、验证集
     dataset_train, args.nb_classes = build_dataset(is_train=True, test_mode=False, args=args)
     if args.disable_eval_during_finetuning:
         dataset_val = None
@@ -273,6 +278,7 @@ def main(args, ds_init):
             dataset_test, num_replicas=num_tasks, rank=global_rank, shuffle=False)
     else:
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+        sampler_test = torch.utils.data.SequentialSampler(dataset_test) 
 
     if global_rank == 0 and args.log_dir is not None:
         os.makedirs(args.log_dir, exist_ok=True)
@@ -298,7 +304,7 @@ def main(args, ds_init):
     if dataset_val is not None:
         data_loader_val = torch.utils.data.DataLoader(
             dataset_val, sampler=sampler_val,
-            batch_size=int(1.5 * args.batch_size),
+            batch_size=args.batch_size,
             num_workers=args.num_workers,
             pin_memory=args.pin_mem,
             drop_last=False,
@@ -319,73 +325,26 @@ def main(args, ds_init):
     else:
         data_loader_test = None
 
-    mixup_fn = None
-    mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
-    if mixup_active:
-        print("Mixup is activated!")
-        mixup_fn = Mixup(
-            mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
-            prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
-            label_smoothing=args.smoothing, num_classes=args.nb_classes)
-
-    if 'deit' in args.model:
+    if 'spikmamba' in args.model:
         model = create_model(
             args.model,
-            pretrained=True,
-            num_classes=args.nb_classes,
-            fc_drop_rate=args.fc_drop_rate,
-            drop_path_rate=args.drop_path,
-            kernel_size=args.tubelet_size,
-            num_frames=args.num_frames,
-        )
-    elif 'videomamba' in args.model:
-        model = create_model(
-            args.model,
-            img_size=args.input_size,
             pretrained=False if args.finetune else True,
             num_classes=args.nb_classes,
-            fc_drop_rate=args.fc_drop_rate,
-            drop_path_rate=args.drop_path,
-            kernel_size=args.tubelet_size,
-            num_frames=args.num_frames,
-            use_checkpoint=args.use_checkpoint,
-            checkpoint_num=args.checkpoint_num,
-        )
-    elif 'spikmamba' in args.model:
-        model = create_model(
-            args.model,
-            img_size_h=args.input_size,
-            pretrained=False if args.finetune else True,
-            num_classes=args.nb_classes,
-            drop_path_rate=args.drop_path,
-            kernel_size=args.tubelet_size,
-            num_frames=args.num_frames,
-            use_checkpoint=args.use_checkpoint,
-            checkpoint_num=args.checkpoint_num,
+            batch_size = args.batch_size,
         )
     else:
-        model = create_model(
-            args.model,
-            pretrained=False,
-            num_classes=args.nb_classes,
-            all_frames=args.num_frames * args.num_segments,
-            tubelet_size=args.tubelet_size,
-            use_learnable_pos_emb=args.use_learnable_pos_emb,
-            fc_drop_rate=args.fc_drop_rate,
-            drop_rate=args.drop,
-            drop_path_rate=args.drop_path,
-            attn_drop_rate=args.attn_drop_rate,
-            drop_block_rate=None,
-            use_checkpoint=args.use_checkpoint,
-            checkpoint_num=args.checkpoint_num,
-            use_mean_pooling=args.use_mean_pooling,
-            init_scale=args.init_scale,
+        # 非 spikmamba 模型时，主动抛出 ValueError 并明确提示
+        raise ValueError(
+            f"❌ 不支持当前模型：{args.model}\n"
+            "当前脚本仅允许加载包含 'spikmamba' 的模型\n"
+            "请检查命令行参数 --model 的取值是否正确！"
         )
 
-    patch_size = model.patch_embed.patch_size
-    print("Patch size = %s" % str(patch_size))
-    args.window_size = (args.num_frames // args.tubelet_size, args.input_size // patch_size[0], args.input_size // patch_size[1])
-    args.patch_size = patch_size
+
+    #patch_size = model.patch_embed.patch_size
+    #print("Patch size = %s" % str(patch_size))
+    #args.window_size = (args.num_frames // args.tubelet_size, args.input_size // patch_size[0], args.input_size // patch_size[1])
+    #args.patch_size = patch_size
 
     if args.finetune:
         if args.finetune.startswith('https'):
@@ -544,48 +503,23 @@ def main(args, ds_init):
     print("Number of training examples = %d" % len(dataset_train))
     print("Number of training training per epoch = %d" % num_training_steps_per_epoch)
 
-    num_layers = model_without_ddp.get_num_layers()
-    if args.layer_decay < 1.0:
-        assigner = LayerDecayValueAssigner(list(args.layer_decay ** (num_layers + 1 - i) for i in range(num_layers + 2)))
-    else:
-        assigner = None
-
-    if assigner is not None:
-        print("Assigned values = %s" % str(assigner.values))
-
-    skip_weight_decay_list = model.no_weight_decay()
-    print("Skip weight decay list: ", skip_weight_decay_list)
-
     amp_autocast = contextlib.nullcontext()
     loss_scaler = "none"
-    if args.enable_deepspeed:
-        loss_scaler = None
-        optimizer_params = get_parameter_groups(
-            model, args.weight_decay, skip_weight_decay_list,
-            assigner.get_layer_id if assigner is not None else None,
-            assigner.get_scale if assigner is not None else None)
-        model, optimizer, _, _ = ds_init(
-            args=args, model=model, model_parameters=optimizer_params, dist_init_required=not args.distributed,
-        )
 
-        print("model.gradient_accumulation_steps() = %d" % model.gradient_accumulation_steps())
-        assert model.gradient_accumulation_steps() == args.update_freq
-    else:
-        if args.distributed:
-            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
-            model_without_ddp = model.module
+    #if args.distributed:
+    #    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
+    #    model_without_ddp = model.module
 
-        optimizer = create_optimizer(
-            args, model_without_ddp, skip_list=skip_weight_decay_list,
-            get_num_layer=assigner.get_layer_id if assigner is not None else None, 
-            get_layer_scale=assigner.get_scale if assigner is not None else None)
+    optimizer = create_optimizer(
+    args, model_without_ddp, skip_list=None,
+    get_num_layer=None, get_layer_scale=None)
 
-        if not args.no_amp:
-            print(f"Use bf16: {args.bf16}")
-            dtype = torch.bfloat16 if args.bf16 else torch.float16
-            amp_autocast = torch.cuda.amp.autocast(dtype=dtype)
-            loss_scaler = NativeScaler()
-            # 反向传播
+    if not args.no_amp:
+        print(f"Use bf16: {args.bf16}")
+        dtype = torch.bfloat16 if args.bf16 else torch.float16
+        amp_autocast = torch.cuda.amp.autocast(dtype=dtype)
+        loss_scaler = NativeScaler()
+        # 反向传播
 
     print("Use step level LR scheduler!")
     lr_schedule_values = utils.cosine_scheduler(
@@ -598,10 +532,7 @@ def main(args, ds_init):
         args.weight_decay, args.weight_decay_end, args.epochs, num_training_steps_per_epoch)
     print("Max WD = %.7f, Min WD = %.7f" % (max(wd_schedule_values), min(wd_schedule_values)))
 
-    if mixup_fn is not None:
-        # smoothing is handled with mixup label transform
-        criterion = SoftTargetCrossEntropy()
-    elif args.smoothing > 0.:
+    if args.smoothing > 0.:
         criterion = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
     else:
         criterion = torch.nn.CrossEntropyLoss()
@@ -649,10 +580,11 @@ def main(args, ds_init):
             print(f"Epoch {epoch} - Log writer setup time: {log_end - log_start:.4f}s")
 
         # 训练一个 epoch 的时间记录
+        
         train_start = time.time()
         train_stats = train_one_epoch(
             model, criterion, data_loader_train, optimizer,
-            device, epoch, loss_scaler, amp_autocast, args.clip_grad, model_ema, mixup_fn,
+            device, epoch, loss_scaler, amp_autocast, args.clip_grad, model_ema,
             log_writer=log_writer, start_steps=epoch * num_training_steps_per_epoch,
             lr_schedule_values=lr_schedule_values, wd_schedule_values=wd_schedule_values,
             num_training_steps_per_epoch=num_training_steps_per_epoch, update_freq=args.update_freq,
@@ -674,7 +606,7 @@ def main(args, ds_init):
                 loss_scaler=loss_scaler, epoch=epoch, model_name='latest', model_ema=model_ema)
         save_end = time.time()
         print(f"Epoch {epoch} - Model saving time: {save_end - save_start:.4f}s")
-
+        
         if data_loader_val is not None:
             test_stats = validation_one_epoch(
                 data_loader_val, model, device, amp_autocast,
@@ -696,21 +628,24 @@ def main(args, ds_init):
                 log_writer.update(val_acc1=test_stats['acc1'], head="perf", step=epoch)
                 log_writer.update(val_acc5=test_stats['acc5'], head="perf", step=epoch)
                 log_writer.update(val_loss=test_stats['loss'], head="perf", step=epoch)
-
+            
             log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
                          **{f'val_{k}': v for k, v in test_stats.items()},
                          'epoch': epoch,
                          'n_parameters': n_parameters}
+            
         else:
+            
             log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
                          'epoch': epoch,
                          'n_parameters': n_parameters}
+            
         if args.output_dir and utils.is_main_process():
             if log_writer is not None:
                 log_writer.flush()
+
             with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
                 f.write(json.dumps(log_stats) + "\n")
-
     preds_file = os.path.join(args.output_dir, str(global_rank if 'global_rank' in locals() else 0) + '.txt')
 
     if args.test_best:

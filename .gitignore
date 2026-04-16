@@ -1,0 +1,28 @@
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Editor settings
+.vscode/
+.idea/
+
+# Training artifacts
+outputs/
+logs/
+runs/
+wandb/
+tensorboard/
+
+# Model checkpoints and weights
+*.pth
+*.pt
+*.ckpt
+
+# OS noise
+.DS_Store
+Thumbs.db

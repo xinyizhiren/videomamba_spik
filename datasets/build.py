@@ -115,7 +115,7 @@ def build_dataset(is_train, test_mode, args):
         elif test_mode is True:
             mode = 'test'
             # print("test_v03_3.csv")
-            anno_path_view1 = os.path.join(args.data_path, 'v03.csv')
+            anno_path_view1 = os.path.join(args.data_path, 'v03_test_set.csv')
             # anno_path_view2 = os.path.join(args.data_path, 'test.csv')
             # anno_path_view1 = os.path.join(args.data_path, 'cam34.csv')
 
@@ -123,7 +123,7 @@ def build_dataset(is_train, test_mode, args):
         else:
             mode = 'validation'
             # print("val_v03_3.csv")
-            anno_path_view1 = os.path.join(args.data_path, 'v03.csv')
+            anno_path_view1 = os.path.join(args.data_path, 'v03_val_set.csv')
             # anno_path_view2 = os.path.join(args.data_path, 'v02_val.csv')
             # anno_path_view1 = os.path.join(args.data_path, 'cam34.csv')
 

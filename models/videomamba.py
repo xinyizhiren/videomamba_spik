@@ -903,9 +903,9 @@ def videomamba_tiny(pretrained=False, **kwargs):
         patch_size=16,
         embed_dim=192,
         depth=24,
-        rms_norm=True,
+        rms_norm=False,
         residual_in_fp32=True,
-        fused_add_norm=True,
+        fused_add_norm=False,
         **kwargs
     )
     model.default_cfg = _cfg()
@@ -922,9 +922,9 @@ def videomamba_small(pretrained=False, **kwargs):
         patch_size=16,
         embed_dim=384,
         depth=24,
-        rms_norm=True,
+        rms_norm=False,
         residual_in_fp32=True,
-        fused_add_norm=True,
+        fused_add_norm=False,
 
         **kwargs
     )
@@ -942,9 +942,9 @@ def videomamba_middle(pretrained=False, **kwargs):
         patch_size=16,
         embed_dim=576,
         depth=32,
-        rms_norm=True,
+        rms_norm=False,
         residual_in_fp32=True,
-        fused_add_norm=True,
+        fused_add_norm=False,
         **kwargs
     )
     model.default_cfg = _cfg()

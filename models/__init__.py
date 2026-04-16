@@ -15,7 +15,7 @@ from .modeling_pretrain import (
     pretrain_videomae_huge_patch16_224 
 )
 from .deit import deit_tiny_patch16_224
-from .videomamba_spik import (
+from .videomamba import (
     videomamba_tiny, 
     videomamba_small, 
     videomamba_middle, 
