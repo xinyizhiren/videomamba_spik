@@ -59,6 +59,8 @@ This script uses:
 - `videomamba_small`
 - pretrained checkpoint `videomamba_s16_k400_f16_res224.pth`
 - `Kinetics_sparse_et`
+- relative project path discovery, so the repo can be moved without editing the script
+- optional environment overrides for `DATA_PATH`, `PREFIX`, `MODEL_PATH`, `OUTPUT_DIR`, and `LOG_DIR`
 
 ## Recommended Finetuning Settings
 
@@ -85,6 +87,15 @@ These values are chosen to reduce overfitting risk while still letting the pretr
 ## How To Run
 
 ```bash
+bash exp/k400/videomamba_small/run_f16x224_ann_et_local.sh
+```
+
+If the dataset or checkpoint lives elsewhere on another machine, you can override paths at runtime:
+
+```bash
+DATA_PATH=/your/dataset/root \
+PREFIX=/your/dataset/root \
+MODEL_PATH=/your/checkpoints/videomamba_s16_k400_f16_res224.pth \
 bash exp/k400/videomamba_small/run_f16x224_ann_et_local.sh
 ```
 

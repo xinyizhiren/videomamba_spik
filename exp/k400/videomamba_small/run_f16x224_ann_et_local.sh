@@ -7,13 +7,14 @@ export CUDA_VISIBLE_DEVICES="0"
 
 JOB_NAME='videomamba_small_cv_train12_test3_ann'
 
-PROJECT_DIR="/home/oyys/code/VIT_4090/videomamba/video_sm"
-OUTPUT_DIR="${PROJECT_DIR}/outputs/${JOB_NAME}"
-LOG_DIR="${PROJECT_DIR}/logs/${JOB_NAME}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_DIR}/outputs/${JOB_NAME}}"
+LOG_DIR="${LOG_DIR:-${PROJECT_DIR}/logs/${JOB_NAME}}"
 
-PREFIX='/data_hdd/oyys/VIT_4090/dataset/data/multiview_action_videos/'
-DATA_PATH='/data_hdd/oyys/VIT_4090/dataset/data/multiview_action_videos/'
-MODEL_PATH="${PROJECT_DIR}/videomamba_s16_k400_f16_res224.pth"
+PREFIX="${PREFIX:-/data_hdd/oyys/VIT_4090/dataset/data/multiview_action_videos/}"
+DATA_PATH="${DATA_PATH:-/data_hdd/oyys/VIT_4090/dataset/data/multiview_action_videos/}"
+MODEL_PATH="${MODEL_PATH:-${PROJECT_DIR}/videomamba_s16_k400_f16_res224.pth}"
 
 python "${PROJECT_DIR}/run_class_finetuning_et.py" \
         --model videomamba_small \
