@@ -152,6 +152,14 @@ def get_args():
                         help='dataset path')
     parser.add_argument('--eval_data_path', default=None, type=str,
                         help='dataset path for evaluation')
+    parser.add_argument('--train_view1_csv', default='aligned_v01_1.csv', type=str,
+                        help='CSV used for the first training view')
+    parser.add_argument('--train_view2_csv', default='aligned_v02_2.csv', type=str,
+                        help='CSV used for the second training view')
+    parser.add_argument('--val_view_csv', default='v03_val_set.csv', type=str,
+                        help='CSV used for validation on the held-out view')
+    parser.add_argument('--test_view_csv', default='v03_test_set.csv', type=str,
+                        help='CSV used for testing on the held-out view')
     parser.add_argument('--nb_classes', default=400, type=int,
                         help='number of the classification types')
     parser.add_argument('--imagenet_default_mean_and_std', default=True, action='store_true')
@@ -165,7 +173,7 @@ def get_args():
     parser.add_argument('--trimmed', type=int, default=60)
     parser.add_argument('--time_stride', type=int, default=16)
     parser.add_argument('--data_set', default='Kinetics', choices=[
-        'Kinetics', 'Kinetics_sparse',
+        'Kinetics', 'Kinetics_sparse', 'Kinetics_sparse_et',
         'SSV2', 'UCF101', 'HMDB51', 'image_folder',
         'mitv1_sparse', 'LVU', 'COIN', 'Breakfast'
     ], type=str, help='dataset')

@@ -8,7 +8,7 @@ from .masking_generator import (
 )
 from .mae import VideoMAE
 from .kinetics import VideoClsDataset
-from .kinetics_sparse_et import VideoClsDataset_sparse
+from .kinetics_sparse_et import VideoClsDataset_sparse as VideoClsDatasetSparseET
 from .ssv2 import SSVideoClsDataset, SSRawFrameClsDataset
 from .lvu import LVU
 
@@ -96,45 +96,30 @@ def build_pretraining_dataset(args):
 def build_dataset(is_train, test_mode, args):
     print(f'Use Dataset: {args.data_set}')
     if args.data_set in [
-            'Kinetics',
             'Kinetics_sparse',
+            'Kinetics_sparse_et',
             'mitv1_sparse'
         ]:
         mode = None
+        train_view1_csv = getattr(args, 'train_view1_csv', 'aligned_v01_1.csv')
+        train_view2_csv = getattr(args, 'train_view2_csv', 'aligned_v02_2.csv')
+        val_view_csv = getattr(args, 'val_view_csv', 'v03_val_set.csv')
+        test_view_csv = getattr(args, 'test_view_csv', 'v03_test_set.csv')
+
         anno_path_view1 = None
         anno_path_view2 = None
         if is_train is True:
             mode = 'train'
-            anno_path_view1 = os.path.join(args.data_path, 'aligned_v01_1.csv')
-            anno_path_view2 = os.path.join(args.data_path, 'aligned_v02_2.csv')
-            # anno_path_view1 = os.path.join(args.data_path, 'cam0.csv')
-            # anno_path_view2 = os.path.join(args.data_path, 'cam1.csv')
-
-            # anno_path_view1 = os.path.join(args.data_path, 'camera_c0022.csv')
-            # anno_path_view2 = os.path.join(args.data_path, 'camera_c0033.csv')
+            anno_path_view1 = os.path.join(args.data_path, train_view1_csv)
+            anno_path_view2 = os.path.join(args.data_path, train_view2_csv)
         elif test_mode is True:
             mode = 'test'
-            # print("test_v03_3.csv")
-            anno_path_view1 = os.path.join(args.data_path, 'v03_test_set.csv')
-            # anno_path_view2 = os.path.join(args.data_path, 'test.csv')
-            # anno_path_view1 = os.path.join(args.data_path, 'cam34.csv')
-
-            # anno_path_view1 = os.path.join(args.data_path, 'camera_c0011.csv')
+            anno_path_view1 = os.path.join(args.data_path, test_view_csv)
         else:
             mode = 'validation'
-            # print("val_v03_3.csv")
-            anno_path_view1 = os.path.join(args.data_path, 'v03_val_set.csv')
-            # anno_path_view2 = os.path.join(args.data_path, 'v02_val.csv')
-            # anno_path_view1 = os.path.join(args.data_path, 'cam34.csv')
+            anno_path_view1 = os.path.join(args.data_path, val_view_csv)
 
-            # anno_path_view1 = os.path.join(args.data_path, 'camera_c0011.csv')
-
-        if 'sparse' in args.data_set:
-            func = VideoClsDataset_sparse
-        else:
-            func = VideoClsDataset
-
-        dataset = func(
+        dataset = VideoClsDatasetSparseET(
             anno_path_view1=anno_path_view1,
             anno_path_view2=anno_path_view2,
             prefix=args.prefix,
@@ -153,6 +138,38 @@ def build_dataset(is_train, test_mode, args):
             new_width=320,
             args=args)
         
+        nb_classes = args.nb_classes
+
+    elif args.data_set == 'Kinetics':
+        mode = None
+        anno_path = None
+        if is_train is True:
+            mode = 'train'
+            anno_path = os.path.join(args.data_path, 'train.csv')
+        elif test_mode is True:
+            mode = 'test'
+            anno_path = os.path.join(args.data_path, 'test.csv')
+        else:
+            mode = 'validation'
+            anno_path = os.path.join(args.data_path, 'val.csv')
+
+        dataset = VideoClsDataset(
+            anno_path=anno_path,
+            prefix=args.prefix,
+            split=args.split,
+            mode=mode,
+            clip_len=args.num_frames,
+            frame_sample_rate=args.sampling_rate,
+            num_segment=1,
+            test_num_segment=args.test_num_segment,
+            test_num_crop=args.test_num_crop,
+            num_crop=1 if not test_mode else 3,
+            keep_aspect_ratio=True,
+            crop_size=args.input_size,
+            short_side_size=args.short_side_size,
+            new_height=256,
+            new_width=320,
+            args=args)
         nb_classes = args.nb_classes
 
     elif args.data_set == 'SSV2':
