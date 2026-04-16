@@ -3,7 +3,7 @@
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS=1
 export PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True'
-export CUDA_VISIBLE_DEVICES="0"
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 
 JOB_NAME='videomamba_small_cv_train12_test3_ann'
 
