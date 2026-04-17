@@ -15,6 +15,9 @@ LOG_DIR="${LOG_DIR:-${PROJECT_DIR}/logs/${JOB_NAME}}"
 PREFIX="${PREFIX:-/data_hdd/oyys/VIT_4090/dataset/data/multiview_action_videos/}"
 DATA_PATH="${DATA_PATH:-/data_hdd/oyys/VIT_4090/dataset/data/multiview_action_videos/}"
 MODEL_PATH="${MODEL_PATH:-${PROJECT_DIR}/videomamba_s16_k400_f16_res224.pth}"
+BASE_LR="${BASE_LR:-3.2e-3}"
+MIN_LR="${MIN_LR:-3.2e-5}"
+WARMUP_LR="${WARMUP_LR:-3.2e-6}"
 
 python "${PROJECT_DIR}/run_class_finetuning_et.py" \
         --model videomamba_small \
@@ -41,7 +44,9 @@ python "${PROJECT_DIR}/run_class_finetuning_et.py" \
         --warmup_epochs 5 \
         --tubelet_size 1 \
         --epochs 80 \
-        --lr 1e-4 \
+        --lr "${BASE_LR}" \
+        --min_lr "${MIN_LR}" \
+        --warmup_lr "${WARMUP_LR}" \
         --layer_decay 0.8 \
         --fc_drop_rate 0.1 \
         --drop_path 0.2 \

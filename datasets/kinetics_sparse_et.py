@@ -332,6 +332,18 @@ class VideoClsDataset_sparse(Dataset):
                         self.test_dataset.append(self.dataset_samples_view1[idx])
                         self.test_seg.append((ck, cp))
 
+    @staticmethod
+    def _build_sample_id(sample):
+        sample = str(sample).replace("\\", "/").strip()
+        marker = "multiview_action_videos/"
+        if marker in sample:
+            sample = sample.split(marker, 1)[1]
+        sample = sample.lstrip("./")
+        sample_id = os.path.splitext(sample)[0]
+        if sample_id:
+            return sample_id
+        return os.path.splitext(os.path.basename(sample))[0]
+
     def __getitem__(self, index):
         if self.mode == 'train':
             args = self.args
@@ -397,7 +409,7 @@ class VideoClsDataset_sparse(Dataset):
                     sample = self.dataset_samples_view1[index]
                     buffer = self.loadvideo_decord(sample, chunk_nb=0)
             buffer = self.data_transform(buffer)
-            return buffer, self.label_array[index], sample.split("/")[-1].split(".")[0]
+            return buffer, self.label_array[index], self._build_sample_id(sample)
             # if len(buffer_view1) == 0 or len(buffer_view2) == 0:
             #     while len(buffer_view1) == 0 or len(buffer_view2) == 0:
             #         warnings.warn(
@@ -449,8 +461,7 @@ class VideoClsDataset_sparse(Dataset):
 
             buffer = self.data_transform(buffer)
             # print(f'buffer shape: {buffer.shape}')
-            return buffer, self.test_label_array[index], sample.split("multiview_action_videos/")[-1].split(".")[0], \
-                chunk_nb, split_nb
+            return buffer, self.test_label_array[index], self._build_sample_id(sample), chunk_nb, split_nb
             # return buffer, self.test_label_array[index], sample.split("ixmas_avi/")[-1].split(".")[0], \
             #     chunk_nb, split_nb
             # return buffer, self.test_label_array[index], sample.split("Interaction/")[-1].split(".")[0], \

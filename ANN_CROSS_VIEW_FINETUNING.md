@@ -61,6 +61,7 @@ This script uses:
 - `Kinetics_sparse_et`
 - relative project path discovery, so the repo can be moved without editing the script
 - optional environment overrides for `DATA_PATH`, `PREFIX`, `MODEL_PATH`, `OUTPUT_DIR`, and `LOG_DIR`
+- stable video ids for held-out-view testing, so multi-crop / multi-segment merge stays at video level
 
 ## Recommended Finetuning Settings
 
@@ -74,7 +75,8 @@ The dataset is relatively small, with only a few hundred samples per view, so th
 - update freq: `2`
 - effective batch size: `8` on one GPU
 - epochs: `80`
-- learning rate: `1e-4`
+- base learning rate: `3.2e-3`
+- effective learning rate after repo linear scaling: `1e-4`
 - layer decay: `0.8`
 - fc drop rate: `0.1`
 - drop path: `0.2`
@@ -83,6 +85,20 @@ The dataset is relatively small, with only a few hundred samples per view, so th
 - test views: `4` temporal segments x `3` spatial crops
 
 These values are chosen to reduce overfitting risk while still letting the pretrained ANN backbone adapt to the cross-view action dataset.
+
+The launcher uses a larger CLI `--lr` on purpose because `run_class_finetuning_et.py` rescales the learning rate by:
+
+```text
+lr = lr * total_batch_size / 256
+```
+
+With `batch_size=4` and `update_freq=2`, the effective batch size is `8`, so:
+
+```text
+3.2e-3 * 8 / 256 = 1e-4
+```
+
+This keeps the actual optimization step size in the intended range for single-GPU fine-tuning.
 
 ## How To Run
 

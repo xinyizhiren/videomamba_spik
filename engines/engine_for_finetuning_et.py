@@ -1,4 +1,5 @@
 import os
+import json
 import numpy as np
 import sys
 from typing import Iterable, Optional
@@ -808,12 +809,13 @@ def final_test(data_loader, model, device, file, amp_autocast, ds=True, no_amp=F
                 # print(f"Heatmap video saved to {video_path}")
 
         for i in range(output.size(0)):
-            string = "{} {} {} {} {}\n".format(ids[i], \
-                                               str(output.data[i].float().cpu().numpy().tolist()), \
-                                               str(int(target[i].cpu().numpy())), \
-                                               str(int(chunk_nb[i].cpu().numpy())), \
-                                               str(int(split_nb[i].cpu().numpy())))
-            final_result.append(string)
+            final_result.append({
+                "id": str(ids[i]).strip(),
+                "logits": output.data[i].float().cpu().numpy().tolist(),
+                "label": int(target[i].cpu().numpy()),
+                "chunk_nb": int(chunk_nb[i].cpu().numpy()),
+                "split_nb": int(split_nb[i].cpu().numpy()),
+            })
 
         acc1, acc5 = accuracy(output, target, topk=(1, maxk))
         print("acc1:", acc1)
@@ -870,10 +872,14 @@ def final_test(data_loader, model, device, file, amp_autocast, ds=True, no_amp=F
 
     if not os.path.exists(file):
         os.mknod(file)
-    with open(file, 'w') as f:
-        f.write("{}, {}\n".format(acc1, acc5))
-        for line in final_result:
-            f.write(line)
+    with open(file, 'w', encoding='utf-8') as f:
+        f.write(json.dumps({
+            "acc1": metric_logger.acc1.global_avg,
+            "acc5": metric_logger.acc5.global_avg,
+            "loss": metric_logger.loss.global_avg,
+        }) + "\n")
+        for record in final_result:
+            f.write(json.dumps(record) + "\n")
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'
@@ -882,41 +888,64 @@ def final_test(data_loader, model, device, file, amp_autocast, ds=True, no_amp=F
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 
+def _parse_eval_record(line):
+    line = line.strip()
+    if not line:
+        return None
+
+    if line.startswith("{"):
+        record = json.loads(line)
+        if "logits" not in record:
+            return None
+        return (
+            str(record["id"]).strip(),
+            np.asarray(record["logits"], dtype=np.float32),
+            str(record["label"]),
+            str(record["chunk_nb"]),
+            str(record["split_nb"]),
+        )
+
+    name = line.split('[')[0].strip()
+    label = line.split(']')[1].split(' ')[1]
+    chunk_nb = line.split(']')[1].split(' ')[2]
+    split_nb = line.split(']')[1].split(' ')[3]
+    logits = np.fromstring(line.split('[')[1].split(']')[0], dtype=np.float32, sep=',')
+    return name, logits, label, chunk_nb, split_nb
+
+
 def merge(eval_path, num_tasks):
     dict_feats = {}
     dict_label = {}
     dict_pos = {}
+    duplicate_segments = 0
     print("Reading individual output files")
 
     for x in range(num_tasks):
         file = os.path.join(eval_path, str(x) + '.txt')
-        lines = open(file, 'r').readlines()[1:]
+        with open(file, 'r', encoding='utf-8') as handle:
+            lines = handle.readlines()
         for line in lines:
-            line = line.strip()
-            name = line.split('[')[0]
-            label = line.split(']')[1].split(' ')[1]
-            chunk_nb = line.split(']')[1].split(' ')[2]
-            split_nb = line.split(']')[1].split(' ')[3]
-            data = np.fromstring(line.split('[')[1].split(']')[0], dtype=np.float32, sep=',')
+            parsed = _parse_eval_record(line)
+            if parsed is None:
+                continue
+            name, data, label, chunk_nb, split_nb = parsed
             data = softmax(data)
             if not name in dict_feats:
                 dict_feats[name] = []
                 dict_label[name] = 0
-                dict_pos[name] = []
-            if chunk_nb + split_nb in dict_pos[name]:
-                print("重复？")
+                dict_pos[name] = set()
+            position_key = f"{chunk_nb}:{split_nb}"
+            if position_key in dict_pos[name]:
+                duplicate_segments += 1
                 continue
 
-            # dict_feats[name] = []
-            # dict_label[name] = 0
-            # dict_pos[name] = []
             dict_feats[name].append(data)
-            dict_pos[name].append(chunk_nb + split_nb)
+            dict_pos[name].add(position_key)
             dict_label[name] = label
     print("Computing final results")
+    print(f"Unique videos: {len(dict_feats)}, duplicate clips skipped: {duplicate_segments}")
 
     input_lst = []
-    print(len(dict_feats))
     for i, item in enumerate(dict_feats):
         input_lst.append([i, item, dict_feats[item], dict_label[item]])
     from multiprocessing import Pool
