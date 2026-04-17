@@ -647,7 +647,8 @@ def main(args, ds_init):
             log_writer=log_writer, start_steps=epoch * num_training_steps_per_epoch,
             lr_schedule_values=lr_schedule_values, wd_schedule_values=wd_schedule_values,
             num_training_steps_per_epoch=num_training_steps_per_epoch, update_freq=args.update_freq,
-            no_amp=args.no_amp, bf16=args.bf16
+            no_amp=args.no_amp, bf16=args.bf16,
+            maxk=5 if args.nb_classes >= 5 else 1
         )
         if args.output_dir and args.save_ckpt:
             # if (epoch + 1) % args.save_ckpt_freq == 0 or epoch + 1 == args.epochs:
@@ -658,6 +659,7 @@ def main(args, ds_init):
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch, model_name='latest', model_ema=model_ema)
         if data_loader_val is not None:
+            print(f"Start validation for epoch {epoch}")
             test_stats = validation_one_epoch(
                 data_loader_val, model, device, amp_autocast,
                 ds=args.enable_deepspeed, no_amp=args.no_amp, bf16=args.bf16,
@@ -684,6 +686,7 @@ def main(args, ds_init):
                          'epoch': epoch,
                          'n_parameters': n_parameters}
         else:
+            print("Validation is disabled for this run.")
             log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
                          'epoch': epoch,
                          'n_parameters': n_parameters}

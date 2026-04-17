@@ -159,7 +159,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                     device: torch.device, epoch: int, loss_scaler, amp_autocast, max_norm: float = 0,
                     model_ema: Optional[ModelEma] = None, mixup_fn: Optional[Mixup] = None, log_writer=None,
                     start_steps=None, lr_schedule_values=None, wd_schedule_values=None,
-                    num_training_steps_per_epoch=None, update_freq=None, no_amp=False, bf16=False):
+                    num_training_steps_per_epoch=None, update_freq=None, no_amp=False, bf16=False, maxk=5):
     model.train(True)
     
     # 手动计算GFLOPs (只在第一个epoch执行一次)
@@ -490,11 +490,18 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
         if mixup_fn is None:
             class_acc = (output.max(-1)[-1] == targets).float().mean()
+            acc1, acc5 = accuracy(output, targets, topk=(1, maxk))
         else:
             class_acc = None
+            acc1, acc5 = None, None
 
         metric_logger.update(loss=loss_value)
         metric_logger.update(class_acc=class_acc)
+        batch_size = samples_view1.shape[0]
+        if acc1 is not None:
+            metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
+        if acc5 is not None:
+            metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
         metric_logger.update(loss_scale=loss_scale_value)
         min_lr = 10.
         max_lr = 0.
@@ -514,6 +521,10 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         if log_writer is not None:
             log_writer.update(loss=loss_value, head="loss")
             log_writer.update(class_acc=class_acc, head="loss")
+            if acc1 is not None:
+                log_writer.update(acc1=acc1.item(), head="loss")
+            if acc5 is not None:
+                log_writer.update(acc5=acc5.item(), head="loss")
             log_writer.update(loss_scale=loss_scale_value, head="opt")
             log_writer.update(lr=max_lr, head="opt")
             log_writer.update(min_lr=min_lr, head="opt")
