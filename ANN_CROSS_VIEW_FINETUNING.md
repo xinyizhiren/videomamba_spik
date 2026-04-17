@@ -71,18 +71,20 @@ The dataset is relatively small, with only a few hundred samples per view, so th
 - frames: `16`
 - sampling rate: `4`
 - input size: `224`
-- batch size: `4`
+- batch size: `6`
 - update freq: `2`
-- effective batch size: `8` on one GPU
+- effective batch size: `12` on one GPU
 - epochs: `80`
 - base learning rate: `3.2e-3`
-- effective learning rate after repo linear scaling: `1e-4`
+- effective learning rate after repo linear scaling: `1.5e-4`
 - layer decay: `0.8`
 - fc drop rate: `0.1`
 - drop path: `0.2`
 - weight decay: `0.05`
 - warmup epochs: `5`
 - test views: `4` temporal segments x `3` spatial crops
+- loss: fused CE + per-view CE by default
+- EDL-style ET auxiliary loss: disabled by default, configurable with `ET_AUX_LOSS_WEIGHT`
 
 These values are chosen to reduce overfitting risk while still letting the pretrained ANN backbone adapt to the cross-view action dataset.
 
@@ -92,13 +94,19 @@ The launcher uses a larger CLI `--lr` on purpose because `run_class_finetuning_e
 lr = lr * total_batch_size / 256
 ```
 
-With `batch_size=4` and `update_freq=2`, the effective batch size is `8`, so:
+With `batch_size=6` and `update_freq=2`, the effective batch size is `12`, so:
 
 ```text
-3.2e-3 * 8 / 256 = 1e-4
+3.2e-3 * 12 / 256 = 1.5e-4
 ```
 
 This keeps the actual optimization step size in the intended range for single-GPU fine-tuning.
+
+The ET launcher now supervises the fused dual-view output and each training view separately. This is important for the current protocol because validation and test are single-view held-out-view evaluations. The previous hard-coded `5 * EDL auxiliary loss + fused CE` objective could dominate the classification signal and make the pretrained backbone look ineffective. If you want to re-enable that auxiliary loss for ablations, set:
+
+```bash
+ET_AUX_LOSS_WEIGHT=5.0 bash exp/k400/videomamba_small/run_f16x224_ann_et_local.sh
+```
 
 ## How To Run
 

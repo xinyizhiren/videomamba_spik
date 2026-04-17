@@ -18,10 +18,13 @@ MODEL_PATH="${MODEL_PATH:-${PROJECT_DIR}/videomamba_s16_k400_f16_res224.pth}"
 BASE_LR="${BASE_LR:-3.2e-3}"
 MIN_LR="${MIN_LR:-3.2e-5}"
 WARMUP_LR="${WARMUP_LR:-3.2e-6}"
+VIEW_CE_LOSS_WEIGHT="${VIEW_CE_LOSS_WEIGHT:-1.0}"
+ET_AUX_LOSS_WEIGHT="${ET_AUX_LOSS_WEIGHT:-0.0}"
 
 python "${PROJECT_DIR}/run_class_finetuning_et.py" \
         --model videomamba_small \
         --finetune "${MODEL_PATH}" \
+        --delete_head \
         --data_path "${DATA_PATH}" \
         --prefix "${PREFIX}" \
         --data_set 'Kinetics_sparse_et' \
@@ -33,7 +36,7 @@ python "${PROJECT_DIR}/run_class_finetuning_et.py" \
         --nb_classes 12 \
         --log_dir "${LOG_DIR}" \
         --output_dir "${OUTPUT_DIR}" \
-        --batch_size 4 \
+        --batch_size 6 \
         --num_sample 1 \
         --input_size 224 \
         --short_side_size 224 \
@@ -47,9 +50,12 @@ python "${PROJECT_DIR}/run_class_finetuning_et.py" \
         --lr "${BASE_LR}" \
         --min_lr "${MIN_LR}" \
         --warmup_lr "${WARMUP_LR}" \
+        --view_ce_loss_weight "${VIEW_CE_LOSS_WEIGHT}" \
+        --et_aux_loss_weight "${ET_AUX_LOSS_WEIGHT}" \
         --layer_decay 0.8 \
-        --fc_drop_rate 0.1 \
-        --drop_path 0.2 \
+        --smoothing 0.0 \
+        --fc_drop_rate 0.0 \
+        --drop_path 0.1 \
         --opt adamw \
         --opt_betas 0.9 0.999 \
         --weight_decay 0.05 \

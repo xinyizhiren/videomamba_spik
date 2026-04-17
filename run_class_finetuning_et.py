@@ -52,6 +52,12 @@ def get_args():
                         help='Attention dropout rate (default: 0.)')
     parser.add_argument('--drop_path', type=float, default=0.1, metavar='PCT',
                         help='Drop path rate (default: 0.1)')
+    parser.add_argument('--view_ce_loss_weight', type=float, default=1.0,
+                        help='Weight for per-view CE supervision in dual-view ET training')
+    parser.add_argument('--et_aux_loss_weight', type=float, default=0.0,
+                        help='Weight for the EDL-style ET auxiliary loss')
+    parser.add_argument('--et_aux_annealing_step', type=int, default=10,
+                        help='Annealing step used by the EDL-style ET auxiliary loss')
 
     parser.add_argument('--disable_eval_during_finetuning', action='store_true', default=False)
     parser.add_argument('--model_ema', action='store_true', default=False)
@@ -648,7 +654,10 @@ def main(args, ds_init):
             lr_schedule_values=lr_schedule_values, wd_schedule_values=wd_schedule_values,
             num_training_steps_per_epoch=num_training_steps_per_epoch, update_freq=args.update_freq,
             no_amp=args.no_amp, bf16=args.bf16,
-            maxk=5 if args.nb_classes >= 5 else 1
+            maxk=5 if args.nb_classes >= 5 else 1,
+            view_ce_loss_weight=args.view_ce_loss_weight,
+            et_aux_loss_weight=args.et_aux_loss_weight,
+            et_aux_annealing_step=args.et_aux_annealing_step
         )
         if args.output_dir and args.save_ckpt:
             # if (epoch + 1) % args.save_ckpt_freq == 0 or epoch + 1 == args.epochs:

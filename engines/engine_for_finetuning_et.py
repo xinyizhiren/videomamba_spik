@@ -86,7 +86,16 @@ def ce_loss(p, alpha, c, global_step, annealing_step):
     return torch.mean((A + B))
 
 
-def train_class_batch(model, samples_view1, samples_view2, target, criterion, cur_epoch):
+def train_class_batch(
+        model,
+        samples_view1,
+        samples_view2,
+        target,
+        criterion,
+        cur_epoch,
+        view_ce_loss_weight=1.0,
+        et_aux_loss_weight=0.0,
+        et_aux_annealing_step=10):
     # 打印 samples_view1 和 samples_view2 的形状，确保输入数据的形状正确
     # print(f'samples_view1 shape: {samples_view1.shape}')
 
@@ -97,14 +106,16 @@ def train_class_batch(model, samples_view1, samples_view2, target, criterion, cu
 
     outputs, alpha1, alpha2 = model(samples_view1, samples_view2)
     num_classes = outputs.shape[-1]
-    loss = criterion(outputs, target)
-    #
-    lossnds1 = ce_loss(target, alpha1 + 1, num_classes, cur_epoch, 10) + \
-               ce_loss(target, alpha2 + 1, num_classes, cur_epoch, 10)
-    # c是类别
-    # print(f"crossloss: {loss}")
-    # print(f"5*lossnds1: {5 * lossnds1}")
-    total_loss = 5* lossnds1 + loss
+    total_loss = criterion(outputs, target)
+
+    if view_ce_loss_weight > 0:
+        view_ce_loss = 0.5 * (criterion(alpha1, target) + criterion(alpha2, target))
+        total_loss = total_loss + view_ce_loss_weight * view_ce_loss
+
+    if et_aux_loss_weight > 0:
+        et_aux_loss = ce_loss(target, alpha1 + 1, num_classes, cur_epoch, et_aux_annealing_step) + \
+                      ce_loss(target, alpha2 + 1, num_classes, cur_epoch, et_aux_annealing_step)
+        total_loss = total_loss + et_aux_loss_weight * et_aux_loss
 
 
     # edl_criterion = EDL_Loss(8)  # edl_criterion = EDL_Loss(num_classes)类别
@@ -159,7 +170,8 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                     device: torch.device, epoch: int, loss_scaler, amp_autocast, max_norm: float = 0,
                     model_ema: Optional[ModelEma] = None, mixup_fn: Optional[Mixup] = None, log_writer=None,
                     start_steps=None, lr_schedule_values=None, wd_schedule_values=None,
-                    num_training_steps_per_epoch=None, update_freq=None, no_amp=False, bf16=False, maxk=5):
+                    num_training_steps_per_epoch=None, update_freq=None, no_amp=False, bf16=False, maxk=5,
+                    view_ce_loss_weight=1.0, et_aux_loss_weight=0.0, et_aux_annealing_step=10):
     model.train(True)
     
     # 手动计算GFLOPs (只在第一个epoch执行一次)
@@ -421,7 +433,11 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             # 这条线
             with amp_autocast:
                 # 方法二三：
-                loss, output = train_class_batch(model, samples_view1, samples_view2, targets, criterion, epoch)
+                loss, output = train_class_batch(
+                    model, samples_view1, samples_view2, targets, criterion, epoch,
+                    view_ce_loss_weight=view_ce_loss_weight,
+                    et_aux_loss_weight=et_aux_loss_weight,
+                    et_aux_annealing_step=et_aux_annealing_step)
                 # print(f"edl total loss: {loss}")
                 # print(f"ce total loss: {loss}")
 
