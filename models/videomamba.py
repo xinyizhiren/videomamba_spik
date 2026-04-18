@@ -706,13 +706,10 @@ class VisionMamba(nn.Module):
         B, C, T, H, W = x.shape
         x = x.permute(0, 2, 3, 4, 1).reshape(B * T, H * W, C)
 
-        cls_token = self.cls_token.expand(x.shape[0], -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
-        x = torch.cat((cls_token, x), dim=1)
-        x = x + self.pos_embed
+        x = x + self.pos_embed[:, 1:, :]
         # print("位置嵌入后:", x.shape)
         # temporal pos
-        cls_tokens = x[:B, :1, :]
-        x = x[:, 1:]
+        cls_tokens = self.cls_token.expand(B, -1, -1) + self.pos_embed[:, :1, :]
         x = rearrange(x, '(b t) n m -> (b n) t m', b=B, t=T)
         # print("重排后:", x.shape)
         # if x.size(1) == 8: # 同时数据集改185和192行//2,降低静态帧率

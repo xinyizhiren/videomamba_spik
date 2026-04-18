@@ -15,11 +15,26 @@ LOG_DIR="${LOG_DIR:-${PROJECT_DIR}/logs/${JOB_NAME}}"
 PREFIX="${PREFIX:-/data_hdd/oyys/VIT_4090/dataset/data/multiview_action_videos/}"
 DATA_PATH="${DATA_PATH:-/data_hdd/oyys/VIT_4090/dataset/data/multiview_action_videos/}"
 MODEL_PATH="${MODEL_PATH:-${PROJECT_DIR}/videomamba_s16_k400_f16_res224.pth}"
+RESUME_PATH="${RESUME_PATH:-}"
+AUTO_AUG="${AUTO_AUG:-none}"
+TRAIN_CROP_MIN_SCALE="${TRAIN_CROP_MIN_SCALE:-0.50}"
+TRAIN_CROP_MAX_SCALE="${TRAIN_CROP_MAX_SCALE:-1.0}"
+DISABLE_TRAIN_FLIP="${DISABLE_TRAIN_FLIP:-1}"
 BASE_LR="${BASE_LR:-3.2e-3}"
 MIN_LR="${MIN_LR:-3.2e-5}"
 WARMUP_LR="${WARMUP_LR:-3.2e-6}"
 VIEW_CE_LOSS_WEIGHT="${VIEW_CE_LOSS_WEIGHT:-1.0}"
 ET_AUX_LOSS_WEIGHT="${ET_AUX_LOSS_WEIGHT:-0.0}"
+
+TRAIN_FLIP_ARGS=()
+if [ "${DISABLE_TRAIN_FLIP}" != "0" ]; then
+        TRAIN_FLIP_ARGS=(--disable_train_flip)
+fi
+
+RESUME_ARGS=(--no_auto_resume)
+if [ -n "${RESUME_PATH}" ]; then
+        RESUME_ARGS=(--resume "${RESUME_PATH}")
+fi
 
 python "${PROJECT_DIR}/run_class_finetuning_et.py" \
         --model videomamba_small \
@@ -43,6 +58,9 @@ python "${PROJECT_DIR}/run_class_finetuning_et.py" \
         --save_ckpt_freq 20 \
         --num_frames 16 \
         --sampling_rate 4 \
+        --aa "${AUTO_AUG}" \
+        --train_crop_min_scale "${TRAIN_CROP_MIN_SCALE}" \
+        --train_crop_max_scale "${TRAIN_CROP_MAX_SCALE}" \
         --num_workers 4 \
         --warmup_epochs 5 \
         --tubelet_size 1 \
@@ -64,4 +82,6 @@ python "${PROJECT_DIR}/run_class_finetuning_et.py" \
         --dist_eval \
         --test_best \
         --bf16 \
-        --update_freq 2
+        --update_freq 2 \
+        "${TRAIN_FLIP_ARGS[@]}" \
+        "${RESUME_ARGS[@]}"

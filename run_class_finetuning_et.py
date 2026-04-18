@@ -106,6 +106,16 @@ def get_args():
                         help='Label smoothing (default: 0.1)')
     parser.add_argument('--train_interpolation', type=str, default='bicubic',
                         help='Training interpolation (random, bilinear, bicubic default: "bicubic")')
+    parser.add_argument('--train_crop_min_scale', type=float, default=0.08,
+                        help='Min random resized crop area ratio for training clips')
+    parser.add_argument('--train_crop_max_scale', type=float, default=1.0,
+                        help='Max random resized crop area ratio for training clips')
+    parser.add_argument('--train_crop_min_ratio', type=float, default=0.75,
+                        help='Min random resized crop aspect ratio for training clips')
+    parser.add_argument('--train_crop_max_ratio', type=float, default=1.3333,
+                        help='Max random resized crop aspect ratio for training clips')
+    parser.add_argument('--disable_train_flip', action='store_true', default=False,
+                        help='Disable random horizontal flip during ET training')
 
     # Evaluation parameters
     parser.add_argument('--crop_pct', type=float, default=None)
@@ -192,10 +202,11 @@ def get_args():
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--resume', default='',
-                        help='resume from checkpoint')
-    parser.add_argument('--auto_resume', action='store_true')
+                        help='resume from a checkpoint file or a checkpoint directory')
+    parser.add_argument('--auto_resume', action='store_true',
+                        help='automatically resume from checkpoints in output_dir when --resume is empty')
     parser.add_argument('--no_auto_resume', action='store_false', dest='auto_resume')
-    parser.set_defaults(auto_resume=True)
+    parser.set_defaults(auto_resume=False)
 
     parser.add_argument('--save_ckpt', action='store_true')
     parser.add_argument('--no_save_ckpt', action='store_false', dest='save_ckpt')

@@ -493,6 +493,36 @@ def save_model(args, epoch, model, model_without_ddp, optimizer, loss_scaler, mo
         model.save_checkpoint(save_dir=local_save_dir, tag=tag_name, client_state=client_state)
 
 
+def _find_checkpoint_file(checkpoint_dir):
+    checkpoint_dir = Path(checkpoint_dir)
+    for checkpoint_name in ('checkpoint-latest.pth', 'checkpoint-best.pth'):
+        checkpoint_path = checkpoint_dir / checkpoint_name
+        if checkpoint_path.exists():
+            return str(checkpoint_path)
+
+    import glob
+    all_checkpoints = glob.glob(str(checkpoint_dir / 'checkpoint-*.pth'))
+    latest_ckpt = -1
+    for ckpt in all_checkpoints:
+        t = ckpt.split('-')[-1].split('.')[0]
+        if t.isdigit():
+            latest_ckpt = max(int(t), latest_ckpt)
+    if latest_ckpt >= 0:
+        return str(checkpoint_dir / ('checkpoint-%d.pth' % latest_ckpt))
+    return ''
+
+
+def _resolve_resume_checkpoint(resume):
+    resume = os.path.expanduser(str(resume))
+    if os.path.isdir(resume):
+        checkpoint_path = _find_checkpoint_file(resume)
+        if not checkpoint_path:
+            raise FileNotFoundError(
+                f"No checkpoint-*.pth file found in resume directory: {resume}")
+        return checkpoint_path
+    return resume
+
+
 def auto_load_model(args, model, model_without_ddp, optimizer, loss_scaler, model_ema=None):
     output_dir = Path(args.output_dir)
 
@@ -500,21 +530,11 @@ def auto_load_model(args, model, model_without_ddp, optimizer, loss_scaler, mode
         # torch.amp
         if args.test_best and args.eval:
             args.resume = os.path.join(output_dir, 'checkpoint-best.pth')
-        elif os.path.exists(os.path.join(output_dir, 'checkpoint-latest.pth')):
-            args.resume = os.path.join(output_dir, 'checkpoint-latest.pth')
-        elif os.path.exists(os.path.join(output_dir, 'checkpoint-best.pth')):
-            args.resume = os.path.join(output_dir, 'checkpoint-best.pth')
-        elif args.auto_resume and len(args.resume) == 0:
-            import glob
-            all_checkpoints = glob.glob(os.path.join(output_dir, 'checkpoint-*.pth'))
-            latest_ckpt = -1
-            for ckpt in all_checkpoints:
-                t = ckpt.split('-')[-1].split('.')[0]
-                if t.isdigit():
-                    latest_ckpt = max(int(t), latest_ckpt)
-            if latest_ckpt >= 0:
-                args.resume = os.path.join(output_dir, 'checkpoint-%d.pth' % latest_ckpt)
-        print("Auto resume checkpoint: %s" % args.resume)
+        elif args.resume:
+            args.resume = _resolve_resume_checkpoint(args.resume)
+        elif args.auto_resume:
+            args.resume = _find_checkpoint_file(output_dir)
+        print("Resume checkpoint: %s" % (args.resume if args.resume else "none"))
 
         if args.resume:
             checkpoint = torch.load(args.resume, map_location='cpu')
@@ -537,19 +557,19 @@ def auto_load_model(args, model, model_without_ddp, optimizer, loss_scaler, mode
                 flag = True
             except Exception:
                 print('No best model')
-        if not flag:
+        if not flag and args.auto_resume:
             try:
                 load_specific_model(model, model_ema, args, output_dir, model_name='latest')
                 flag = True
             except Exception:
                 print('No latest model')
-        if not flag:
+        if not flag and args.auto_resume:
             try:
                 load_specific_model(model, model_ema, args, output_dir, model_name='best')
                 flag = True
             except Exception:
                 print('No best model')
-        if not flag: 
+        if not flag and args.auto_resume:
             import glob
             all_checkpoints = glob.glob(os.path.join(output_dir, 'checkpoint-*'))
             latest_ckpt = -1
@@ -561,6 +581,8 @@ def auto_load_model(args, model, model_without_ddp, optimizer, loss_scaler, mode
                 load_specific_model(model, model_ema, args, output_dir, model_name=latest_ckpt)
             else:
                 print('No other models')
+        if not flag and not args.auto_resume:
+            print('Auto resume disabled.')
 
 
 def load_specific_model(model, model_ema, args, output_dir, model_name):

@@ -478,18 +478,19 @@ class VideoClsDataset_sparse(Dataset):
             args,
     ):
 
-        aug_transform = create_random_augment(
-            input_size=(self.crop_size, self.crop_size),
-            auto_augment=args.aa,
-            interpolation=args.train_interpolation,
-        )
-
         buffer = [
             transforms.ToPILImage()(frame) for frame in buffer
         ]
 
         # 去掉随机变换
-        buffer = aug_transform(buffer)
+        auto_augment = str(getattr(args, 'aa', '') or '').strip()
+        if auto_augment.lower() not in ['', 'none', 'off', 'false', '0', 'disabled']:
+            aug_transform = create_random_augment(
+                input_size=(self.crop_size, self.crop_size),
+                auto_augment=auto_augment,
+                interpolation=args.train_interpolation,
+            )
+            buffer = aug_transform(buffer)
 
         buffer = [transforms.ToTensor()(img) for img in buffer]
         buffer = torch.stack(buffer)  # T C H W
@@ -506,8 +507,12 @@ class VideoClsDataset_sparse(Dataset):
         buffer = buffer.permute(3, 0, 1, 2)
         # Perform data augmentation.
         scl, asp = (
-            [0.08, 1.0],
-            [0.75, 1.3333],
+            [getattr(args, 'train_crop_min_scale', 0.08), getattr(args, 'train_crop_max_scale', 1.0)],
+            [getattr(args, 'train_crop_min_ratio', 0.75), getattr(args, 'train_crop_max_ratio', 1.3333)],
+        )
+        random_horizontal_flip = (
+            False if args.data_set == 'SSV2'
+            else not getattr(args, 'disable_train_flip', False)
         )
 
         buffer = spatial_sampling(
@@ -516,7 +521,7 @@ class VideoClsDataset_sparse(Dataset):
             min_scale=256,
             max_scale=320,
             crop_size=self.crop_size,
-            random_horizontal_flip=False if args.data_set == 'SSV2' else True,
+            random_horizontal_flip=random_horizontal_flip,
             inverse_uniform_sampling=False,
             aspect_ratio=asp,
             scale=scl,
