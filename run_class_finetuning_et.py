@@ -283,6 +283,50 @@ def print_run_summary(args):
         print(f"  {key}: {getattr(args, key, None)}")
 
 
+def _label_to_key(label):
+    try:
+        return int(label)
+    except (TypeError, ValueError):
+        return str(label)
+
+
+def _build_balanced_debug_indices(dataset, sample_count, batch_size, seed):
+    sample_count = min(len(dataset), max(int(sample_count), int(batch_size)))
+    labels = getattr(dataset, "label_array", None)
+    rng = np.random.default_rng(seed)
+
+    if labels is None:
+        indices = rng.permutation(len(dataset))[:sample_count].tolist()
+        return indices, None
+
+    class_to_indices = OrderedDict()
+    for index, label in enumerate(labels):
+        class_to_indices.setdefault(_label_to_key(label), []).append(index)
+
+    for indices in class_to_indices.values():
+        rng.shuffle(indices)
+
+    selected = []
+    class_keys = list(class_to_indices.keys())
+    positions = {key: 0 for key in class_keys}
+    while len(selected) < sample_count:
+        added = False
+        for key in class_keys:
+            position = positions[key]
+            indices = class_to_indices[key]
+            if position < len(indices):
+                selected.append(indices[position])
+                positions[key] += 1
+                added = True
+                if len(selected) >= sample_count:
+                    break
+        if not added:
+            break
+
+    debug_labels = [_label_to_key(labels[index]) for index in selected]
+    return selected, debug_labels
+
+
 def main(args, ds_init):
     utils.init_distributed_mode(args)
 
@@ -309,13 +353,19 @@ def main(args, ds_init):
     dataset_test, _ = build_dataset(is_train=False, test_mode=True, args=args)
     if args.debug_overfit_samples > 0:
         requested_debug_n = int(args.debug_overfit_samples)
-        debug_n = min(len(dataset_train), max(requested_debug_n, args.batch_size))
-        dataset_train = torch.utils.data.Subset(dataset_train, list(range(debug_n)))
+        debug_indices, debug_labels = _build_balanced_debug_indices(
+            dataset_train, requested_debug_n, args.batch_size, seed)
+        dataset_train = torch.utils.data.Subset(dataset_train, debug_indices)
         print(
-            f"Tiny-overfit debug mode: train dataset restricted to {debug_n} samples "
+            f"Tiny-overfit debug mode: train dataset restricted to {len(debug_indices)} balanced samples "
             f"(requested {requested_debug_n}).")
-        if debug_n != requested_debug_n:
+        if len(debug_indices) != requested_debug_n:
             print("Tiny-overfit note: sample count was adjusted so drop_last=True still leaves train batches.")
+        if debug_labels is not None:
+            debug_hist = OrderedDict()
+            for label in debug_labels:
+                debug_hist[label] = debug_hist.get(label, 0) + 1
+            print(f"Tiny-overfit class histogram: {dict(debug_hist)}")
         if not args.disable_eval_during_finetuning:
             print("Tiny-overfit note: validation still uses the configured held-out validation view.")
 
