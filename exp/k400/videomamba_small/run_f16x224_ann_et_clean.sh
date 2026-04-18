@@ -27,9 +27,10 @@ UPDATE_FREQ="${UPDATE_FREQ:-1}"
 PRINT_FREQ="${PRINT_FREQ:-10}"
 DEBUG_OVERFIT_SAMPLES="${DEBUG_OVERFIT_SAMPLES:-0}"
 
-AUTO_AUG="${AUTO_AUG:-none}"
 TRAIN_CROP_MIN_SCALE="${TRAIN_CROP_MIN_SCALE:-0.50}"
 TRAIN_CROP_MAX_SCALE="${TRAIN_CROP_MAX_SCALE:-1.0}"
+TRAIN_CROP_MIN_RATIO="${TRAIN_CROP_MIN_RATIO:-0.75}"
+TRAIN_CROP_MAX_RATIO="${TRAIN_CROP_MAX_RATIO:-1.3333}"
 DISABLE_TRAIN_FLIP="${DISABLE_TRAIN_FLIP:-1}"
 FUSED_CE_LOSS_WEIGHT="${FUSED_CE_LOSS_WEIGHT:-1.0}"
 VIEW_CE_LOSS_WEIGHT="${VIEW_CE_LOSS_WEIGHT:-1.0}"
@@ -50,15 +51,13 @@ if [ "${DEBUG_OVERFIT_SAMPLES}" != "0" ]; then
 fi
 
 python "${PROJECT_DIR}/run_class_finetuning_et_clean.py" \
-        --model videomamba_small \
         --finetune "${MODEL_PATH}" \
-        --delete_head \
         --data_path "${DATA_PATH}" \
         --prefix "${PREFIX}" \
         --train_view1_csv 'aligned_v01_1.csv' \
         --train_view2_csv 'aligned_v02_2.csv' \
         --val_view_csv 'v03_val_set.csv' \
-        --split ',' \
+        --csv_delimiter ',' \
         --nb_classes 12 \
         --output_dir "${OUTPUT_DIR}" \
         --batch_size "${BATCH_SIZE}" \
@@ -77,9 +76,10 @@ python "${PROJECT_DIR}/run_class_finetuning_et_clean.py" \
         --update_freq "${UPDATE_FREQ}" \
         --fused_ce_loss_weight "${FUSED_CE_LOSS_WEIGHT}" \
         --view_ce_loss_weight "${VIEW_CE_LOSS_WEIGHT}" \
-        --aa "${AUTO_AUG}" \
         --train_crop_min_scale "${TRAIN_CROP_MIN_SCALE}" \
         --train_crop_max_scale "${TRAIN_CROP_MAX_SCALE}" \
+        --train_crop_min_ratio "${TRAIN_CROP_MIN_RATIO}" \
+        --train_crop_max_ratio "${TRAIN_CROP_MAX_RATIO}" \
         --print_freq "${PRINT_FREQ}" \
         --bf16 \
         "${TRAIN_FLIP_ARGS[@]}" \

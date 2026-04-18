@@ -10,23 +10,20 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from timm.models import create_model
 
-from datasets.kinetics_sparse_et import VideoClsDataset_sparse
-from models import *  # noqa: F401,F403 - registers VideoMamba models with timm
+from datasets.multiview_action_clean import CrossViewTrainDataset, SingleViewDataset, VideoTransform
+from models.videomamba_clean import create_videomamba_small_clean
 
 
 def get_args():
     parser = argparse.ArgumentParser("Clean VideoMamba ET fine-tuning")
-    parser.add_argument("--model", default="videomamba_small")
     parser.add_argument("--finetune", default="")
     parser.add_argument("--resume", default="")
-    parser.add_argument("--delete_head", action="store_true")
     parser.add_argument("--model_key", default="model|module")
 
     parser.add_argument("--data_path", required=True)
     parser.add_argument("--prefix", default="")
-    parser.add_argument("--split", default=",")
+    parser.add_argument("--csv_delimiter", default=",")
     parser.add_argument("--train_view1_csv", default="aligned_v01_1.csv")
     parser.add_argument("--train_view2_csv", default="aligned_v02_2.csv")
     parser.add_argument("--val_view_csv", default="v03_val_set.csv")
@@ -49,7 +46,6 @@ def get_args():
     parser.add_argument("--clip_grad", default=None, type=float)
     parser.add_argument("--update_freq", default=1, type=int)
     parser.add_argument("--bf16", action="store_true")
-    parser.add_argument("--fp16", action="store_true")
 
     parser.add_argument("--fused_ce_loss_weight", default=1.0, type=float)
     parser.add_argument("--view_ce_loss_weight", default=1.0, type=float)
@@ -63,23 +59,14 @@ def get_args():
     parser.add_argument("--tubelet_size", default=1, type=int)
     parser.add_argument("--drop_path", default=0.0, type=float)
     parser.add_argument("--fc_drop_rate", default=0.0, type=float)
-    parser.add_argument("--use_checkpoint", action="store_true")
-    parser.add_argument("--checkpoint_num", default=0, type=int)
     parser.add_argument("--use_mean_pooling", action="store_true", default=True)
     parser.add_argument("--use_cls", action="store_false", dest="use_mean_pooling")
 
-    parser.add_argument("--aa", default="none")
-    parser.add_argument("--train_interpolation", default="bicubic")
     parser.add_argument("--train_crop_min_scale", default=0.5, type=float)
     parser.add_argument("--train_crop_max_scale", default=1.0, type=float)
     parser.add_argument("--train_crop_min_ratio", default=0.75, type=float)
     parser.add_argument("--train_crop_max_ratio", default=1.3333, type=float)
     parser.add_argument("--disable_train_flip", action="store_true", default=True)
-    parser.add_argument("--reprob", default=-1.0, type=float)
-    parser.add_argument("--remode", default="pixel")
-    parser.add_argument("--recount", default=1, type=int)
-    parser.add_argument("--num_sample", default=1, type=int)
-    parser.add_argument("--data_set", default="Kinetics_sparse_et")
     return parser.parse_args()
 
 
@@ -88,6 +75,12 @@ def set_seed(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+
+
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2 ** 32
+    random.seed(worker_seed)
+    np.random.seed(worker_seed)
 
 
 def label_key(label):
@@ -127,34 +120,46 @@ def balanced_subset_indices(dataset, sample_count, seed):
 
 
 def make_dataset(args, mode):
+    deterministic_debug = args.debug_overfit_samples > 0
     if mode == "train":
         anno_view1 = os.path.join(args.data_path, args.train_view1_csv)
         anno_view2 = os.path.join(args.data_path, args.train_view2_csv)
+        transform = VideoTransform(
+            crop_size=args.input_size,
+            short_side_size=args.short_side_size,
+            train=True,
+            deterministic=deterministic_debug,
+            crop_scale=(args.train_crop_min_scale, args.train_crop_max_scale),
+            crop_ratio=(args.train_crop_min_ratio, args.train_crop_max_ratio),
+            horizontal_flip=not args.disable_train_flip,
+        )
+        return CrossViewTrainDataset(
+            view1_csv=anno_view1,
+            view2_csv=anno_view2,
+            prefix=args.prefix,
+            delimiter=args.csv_delimiter,
+            clip_len=args.num_frames,
+            sampling_rate=args.sampling_rate,
+            transform=transform,
+            random_temporal=not deterministic_debug,
+        )
     elif mode == "validation":
         anno_view1 = os.path.join(args.data_path, args.val_view_csv)
-        anno_view2 = None
+        transform = VideoTransform(
+            crop_size=args.input_size,
+            short_side_size=args.short_side_size,
+            train=False,
+        )
+        return SingleViewDataset(
+            csv_path=anno_view1,
+            prefix=args.prefix,
+            delimiter=args.csv_delimiter,
+            clip_len=args.num_frames,
+            sampling_rate=args.sampling_rate,
+            transform=transform,
+        )
     else:
         raise ValueError(f"Unsupported mode for clean training: {mode}")
-
-    return VideoClsDataset_sparse(
-        anno_path_view1=anno_view1,
-        anno_path_view2=anno_view2,
-        prefix=args.prefix,
-        split=args.split,
-        mode=mode,
-        clip_len=args.num_frames,
-        frame_sample_rate=args.sampling_rate,
-        crop_size=args.input_size,
-        short_side_size=args.short_side_size,
-        num_segment=1,
-        num_crop=1,
-        test_num_segment=1,
-        test_num_crop=1,
-        keep_aspect_ratio=True,
-        new_height=256,
-        new_width=320,
-        args=args,
-    )
 
 
 def extract_checkpoint_state(checkpoint, model_key):
@@ -177,15 +182,12 @@ def strip_prefixes(state):
     return stripped
 
 
-def load_pretrained(model, path, model_key, delete_head):
+def load_pretrained(model, path, model_key):
     if not path:
         return
     checkpoint = torch.load(path, map_location="cpu")
     state, used_key = extract_checkpoint_state(checkpoint, model_key)
     state = strip_prefixes(state)
-    if delete_head:
-        state.pop("head.weight", None)
-        state.pop("head.bias", None)
 
     model_state = model.state_dict()
     loadable = OrderedDict()
@@ -250,10 +252,9 @@ def make_scheduler(optimizer, args):
 
 
 def amp_context(device, args):
-    if device.type != "cuda" or (not args.bf16 and not args.fp16):
+    if device.type != "cuda" or not args.bf16:
         return contextlib.nullcontext()
-    dtype = torch.bfloat16 if args.bf16 else torch.float16
-    return torch.cuda.amp.autocast(dtype=dtype)
+    return torch.cuda.amp.autocast(dtype=torch.bfloat16)
 
 
 def accuracy(logits, target, topk=(1, 5)):
@@ -411,8 +412,6 @@ def main():
     args = get_args()
     if args.fused_ce_loss_weight <= 0 and args.view_ce_loss_weight <= 0:
         raise ValueError("At least one of fused_ce_loss_weight or view_ce_loss_weight must be > 0.")
-    if args.bf16 and args.fp16:
-        raise ValueError("Use only one mixed precision mode: --bf16 or --fp16.")
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     set_seed(args.seed)
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
@@ -433,6 +432,8 @@ def main():
         train_dataset = torch.utils.data.Subset(train_dataset, indices)
         print(f"Debug balanced subset: {len(indices)} samples; class histogram: {dict(label_hist)}")
     val_dataset = make_dataset(args, "validation")
+    loader_generator = torch.Generator()
+    loader_generator.manual_seed(args.seed)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
@@ -442,6 +443,8 @@ def main():
         pin_memory=args.pin_mem,
         drop_last=True,
         persistent_workers=args.num_workers > 0,
+        worker_init_fn=seed_worker,
+        generator=loader_generator,
     )
     val_loader = torch.utils.data.DataLoader(
         val_dataset,
@@ -451,28 +454,25 @@ def main():
         pin_memory=args.pin_mem,
         drop_last=False,
         persistent_workers=args.num_workers > 0,
+        worker_init_fn=seed_worker,
     )
 
-    model = create_model(
-        args.model,
+    model = create_videomamba_small_clean(
         img_size=args.input_size,
-        pretrained=False if args.finetune else True,
         num_classes=args.nb_classes,
-        fc_drop_rate=args.fc_drop_rate,
-        drop_path_rate=args.drop_path,
-        kernel_size=args.tubelet_size,
         num_frames=args.num_frames,
-        use_checkpoint=args.use_checkpoint,
-        checkpoint_num=args.checkpoint_num,
+        tubelet_size=args.tubelet_size,
+        fc_drop_rate=args.fc_drop_rate,
+        drop_path=args.drop_path,
         use_mean_pooling=args.use_mean_pooling,
     )
-    load_pretrained(model, args.finetune, args.model_key, args.delete_head)
+    load_pretrained(model, args.finetune, args.model_key)
     model.to(device)
 
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = make_scheduler(optimizer, args)
-    scaler = torch.cuda.amp.GradScaler(enabled=args.fp16 and device.type == "cuda")
+    scaler = torch.cuda.amp.GradScaler(enabled=False)
 
     if args.resume:
         args.start_epoch, best_acc1 = load_resume(model, optimizer, scheduler, args.resume, device)
