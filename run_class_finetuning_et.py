@@ -225,6 +225,13 @@ def get_args():
     parser.add_argument('--num_workers', default=10, type=int)
     parser.add_argument('--print_freq', default=10, type=int,
                         help='Training log print frequency in iterations')
+    parser.add_argument('--debug_overfit_samples', default=0, type=int,
+                        help='Restrict the training set to the first N samples for tiny-overfit debugging')
+    parser.add_argument('--log_pred_hist', action='store_true',
+                        help='Log per-epoch target/prediction class histograms to log.txt')
+    parser.add_argument('--no_log_pred_hist', action='store_false', dest='log_pred_hist',
+                        help='Disable prediction histogram diagnostics')
+    parser.set_defaults(log_pred_hist=True)
     parser.add_argument('--pin_mem', action='store_true',
                         help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
     parser.add_argument('--no_pin_mem', action='store_false', dest='pin_mem')
@@ -268,7 +275,8 @@ def print_run_summary(args):
         "epochs", "lr", "min_lr", "warmup_lr", "layer_decay",
         "fused_ce_loss_weight", "view_ce_loss_weight", "et_aux_loss_weight",
         "aa", "train_crop_min_scale", "train_crop_max_scale",
-        "disable_train_flip", "bf16", "output_dir"
+        "disable_train_flip", "debug_overfit_samples", "log_pred_hist",
+        "bf16", "output_dir"
     ]
     print("Run configuration:")
     for key in keys:
@@ -299,6 +307,17 @@ def main(args, ds_init):
     else:
         dataset_val, _ = build_dataset(is_train=False, test_mode=False, args=args)
     dataset_test, _ = build_dataset(is_train=False, test_mode=True, args=args)
+    if args.debug_overfit_samples > 0:
+        requested_debug_n = int(args.debug_overfit_samples)
+        debug_n = min(len(dataset_train), max(requested_debug_n, args.batch_size))
+        dataset_train = torch.utils.data.Subset(dataset_train, list(range(debug_n)))
+        print(
+            f"Tiny-overfit debug mode: train dataset restricted to {debug_n} samples "
+            f"(requested {requested_debug_n}).")
+        if debug_n != requested_debug_n:
+            print("Tiny-overfit note: sample count was adjusted so drop_last=True still leaves train batches.")
+        if not args.disable_eval_during_finetuning:
+            print("Tiny-overfit note: validation still uses the configured held-out validation view.")
 
     num_tasks = utils.get_world_size()
     global_rank = utils.get_rank()
@@ -695,7 +714,9 @@ def main(args, ds_init):
             view_ce_loss_weight=args.view_ce_loss_weight,
             et_aux_loss_weight=args.et_aux_loss_weight,
             et_aux_annealing_step=args.et_aux_annealing_step,
-            print_freq=args.print_freq
+            print_freq=args.print_freq,
+            num_classes=args.nb_classes,
+            log_pred_hist=args.log_pred_hist
         )
         if args.output_dir and args.save_ckpt:
             # if (epoch + 1) % args.save_ckpt_freq == 0 or epoch + 1 == args.epochs:
@@ -710,7 +731,9 @@ def main(args, ds_init):
             test_stats = validation_one_epoch(
                 data_loader_val, model, device, amp_autocast,
                 ds=args.enable_deepspeed, no_amp=args.no_amp, bf16=args.bf16,
-                maxk=5 if args.nb_classes >= 5 else 1
+                maxk=5 if args.nb_classes >= 5 else 1,
+                num_classes=args.nb_classes,
+                log_pred_hist=args.log_pred_hist
             )
             timestep = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
             print(

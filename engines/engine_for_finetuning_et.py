@@ -27,6 +27,33 @@ from fvcore.nn import FlopCountAnalysis
 
 import torch.nn as nn
 
+
+def _empty_hist(num_classes):
+    return torch.zeros(int(num_classes), dtype=torch.long)
+
+
+def _update_hist(hist, values):
+    if hist is None or values is None:
+        return
+    values = values.detach().view(-1).long().cpu()
+    hist += torch.bincount(values, minlength=hist.numel())[:hist.numel()]
+
+
+def _sync_hist(hist):
+    if hist is None:
+        return None
+    if dist.is_available() and dist.is_initialized():
+        device = torch.device("cuda", torch.cuda.current_device()) if torch.cuda.is_available() else hist.device
+        synced = hist.to(device)
+        dist.all_reduce(synced, op=dist.ReduceOp.SUM)
+        return synced.cpu()
+    return hist
+
+
+def _hist_to_list(hist):
+    return [int(x) for x in _sync_hist(hist).tolist()]
+
+
 class EDL_Loss(nn.Module):
     """
     evidence deep learning loss
@@ -195,7 +222,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                     start_steps=None, lr_schedule_values=None, wd_schedule_values=None,
                     num_training_steps_per_epoch=None, update_freq=None, no_amp=False, bf16=False, maxk=5,
                     fused_ce_loss_weight=1.0, view_ce_loss_weight=1.0, et_aux_loss_weight=0.0,
-                    et_aux_annealing_step=10, print_freq=10):
+                    et_aux_annealing_step=10, print_freq=10, num_classes=None, log_pred_hist=True):
     model.train(True)
     
     # 手动计算GFLOPs (只在第一个epoch执行一次)
@@ -271,6 +298,15 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         metric_logger.add_meter(meter_name, utils.SmoothedValue(window_size=1, fmt='{value:.0f}'))
     header = 'Epoch: [{}]'.format(epoch)
     print_freq = max(1, int(print_freq))
+    num_classes = int(num_classes or getattr(model, "num_classes", 0) or 0)
+    train_hists = None
+    if log_pred_hist and num_classes > 0 and mixup_fn is None:
+        train_hists = {
+            "target_hist": _empty_hist(num_classes),
+            "fused_pred_hist": _empty_hist(num_classes),
+            "view1_pred_hist": _empty_hist(num_classes),
+            "view2_pred_hist": _empty_hist(num_classes),
+        }
 
     if loss_scaler is None:
         model.zero_grad()
@@ -544,6 +580,11 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             fused_correct = (fused_pred == targets).sum().item()
             view1_correct = (view1_pred == targets).sum().item()
             view2_correct = (view2_pred == targets).sum().item()
+            if train_hists is not None:
+                _update_hist(train_hists["target_hist"], targets)
+                _update_hist(train_hists["fused_pred_hist"], fused_pred)
+                _update_hist(train_hists["view1_pred_hist"], view1_pred)
+                _update_hist(train_hists["view2_pred_hist"], view2_pred)
             class_acc = (fused_pred == targets).float().mean()
             acc1, acc5 = accuracy(output, targets, topk=(1, maxk))
             view1_acc1, view1_acc5 = accuracy(view1_output, targets, topk=(1, maxk))
@@ -622,15 +663,26 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
-    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+    stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+    if train_hists is not None:
+        stats.update({name: _hist_to_list(hist) for name, hist in train_hists.items()})
+    return stats
 
 
 @torch.no_grad()
-def validation_one_epoch(data_loader, model, device, amp_autocast, ds=True, no_amp=False, bf16=False, maxk=5):
+def validation_one_epoch(data_loader, model, device, amp_autocast, ds=True, no_amp=False, bf16=False, maxk=5,
+                         num_classes=None, log_pred_hist=True):
     criterion = torch.nn.CrossEntropyLoss()
 
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Val:'
+    num_classes = int(num_classes or getattr(model, "num_classes", 0) or 0)
+    val_hists = None
+    if log_pred_hist and num_classes > 0:
+        val_hists = {
+            "target_hist": _empty_hist(num_classes),
+            "pred_hist": _empty_hist(num_classes),
+        }
 
 
     # switch to evaluation mode
@@ -673,6 +725,9 @@ def validation_one_epoch(data_loader, model, device, amp_autocast, ds=True, no_a
                 loss = criterion(output, target)
 
         acc1, acc5 = accuracy(output, target, topk=(1, maxk))
+        if val_hists is not None:
+            _update_hist(val_hists["target_hist"], target)
+            _update_hist(val_hists["pred_hist"], output.argmax(dim=1))
 
         batch_size = videos_view1.shape[0]
         metric_logger.update(loss=loss.item())
@@ -683,7 +738,10 @@ def validation_one_epoch(data_loader, model, device, amp_autocast, ds=True, no_a
     print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'
           .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
 
-    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+    stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+    if val_hists is not None:
+        stats.update({name: _hist_to_list(hist) for name, hist in val_hists.items()})
+    return stats
 
 
 # 模块级别（保持不变）

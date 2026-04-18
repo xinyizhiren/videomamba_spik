@@ -23,10 +23,16 @@ DISABLE_TRAIN_FLIP="${DISABLE_TRAIN_FLIP:-1}"
 BASE_LR="${BASE_LR:-3.2e-3}"
 MIN_LR="${MIN_LR:-3.2e-5}"
 WARMUP_LR="${WARMUP_LR:-3.2e-6}"
+EPOCHS="${EPOCHS:-80}"
+LAYER_DECAY="${LAYER_DECAY:-0.8}"
+WEIGHT_DECAY="${WEIGHT_DECAY:-0.05}"
+DROP_PATH="${DROP_PATH:-0.1}"
 FUSED_CE_LOSS_WEIGHT="${FUSED_CE_LOSS_WEIGHT:-0.0}"
 VIEW_CE_LOSS_WEIGHT="${VIEW_CE_LOSS_WEIGHT:-1.0}"
 ET_AUX_LOSS_WEIGHT="${ET_AUX_LOSS_WEIGHT:-0.0}"
 PRINT_FREQ="${PRINT_FREQ:-10}"
+DEBUG_OVERFIT_SAMPLES="${DEBUG_OVERFIT_SAMPLES:-0}"
+LOG_PRED_HIST="${LOG_PRED_HIST:-1}"
 
 TRAIN_FLIP_ARGS=()
 if [ "${DISABLE_TRAIN_FLIP}" != "0" ]; then
@@ -36,6 +42,16 @@ fi
 RESUME_ARGS=(--no_auto_resume)
 if [ -n "${RESUME_PATH}" ]; then
         RESUME_ARGS=(--resume "${RESUME_PATH}")
+fi
+
+PRED_HIST_ARGS=()
+if [ "${LOG_PRED_HIST}" = "0" ]; then
+        PRED_HIST_ARGS=(--no_log_pred_hist)
+fi
+
+OVERFIT_ARGS=()
+if [ "${DEBUG_OVERFIT_SAMPLES}" != "0" ]; then
+        OVERFIT_ARGS=(--debug_overfit_samples "${DEBUG_OVERFIT_SAMPLES}")
 fi
 
 python "${PROJECT_DIR}/run_class_finetuning_et.py" \
@@ -66,20 +82,20 @@ python "${PROJECT_DIR}/run_class_finetuning_et.py" \
         --num_workers 4 \
         --warmup_epochs 5 \
         --tubelet_size 1 \
-        --epochs 80 \
+        --epochs "${EPOCHS}" \
         --lr "${BASE_LR}" \
         --min_lr "${MIN_LR}" \
         --warmup_lr "${WARMUP_LR}" \
         --fused_ce_loss_weight "${FUSED_CE_LOSS_WEIGHT}" \
         --view_ce_loss_weight "${VIEW_CE_LOSS_WEIGHT}" \
         --et_aux_loss_weight "${ET_AUX_LOSS_WEIGHT}" \
-        --layer_decay 0.8 \
+        --layer_decay "${LAYER_DECAY}" \
         --smoothing 0.0 \
         --fc_drop_rate 0.0 \
-        --drop_path 0.1 \
+        --drop_path "${DROP_PATH}" \
         --opt adamw \
         --opt_betas 0.9 0.999 \
-        --weight_decay 0.05 \
+        --weight_decay "${WEIGHT_DECAY}" \
         --test_num_segment 4 \
         --test_num_crop 3 \
         --dist_eval \
@@ -88,4 +104,6 @@ python "${PROJECT_DIR}/run_class_finetuning_et.py" \
         --bf16 \
         --update_freq 2 \
         "${TRAIN_FLIP_ARGS[@]}" \
+        "${PRED_HIST_ARGS[@]}" \
+        "${OVERFIT_ARGS[@]}" \
         "${RESUME_ARGS[@]}"
