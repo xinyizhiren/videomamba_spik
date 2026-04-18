@@ -15,6 +15,16 @@ try:
 except ImportError:
     causal_conv1d_fn, causal_conv1d_update = None
 
+
+def causal_conv1d_fn_compat(x, weight, bias, activation):
+    try:
+        return causal_conv1d_fn(x, weight, bias, activation=activation)
+    except TypeError as exc:
+        if "activation" not in str(exc):
+            raise
+        return causal_conv1d_fn(x, weight, bias, activation)
+
+
 _SELECTIVE_SCAN_IMPORT_ERRORS = []
 try:
     from mamba_ssm.ops.selective_scan_interface import selective_scan_fn
@@ -287,7 +297,7 @@ class Mamba(nn.Module):
                     x = self.act(conv1d(x)[..., :seqlen])
                 else:
                     assert self.activation in ["silu", "swish"]
-                    x = causal_conv1d_fn(
+                    x = causal_conv1d_fn_compat(
                         x,
                         rearrange(conv1d.weight, "d 1 w -> d w"),
                         conv1d.bias,
