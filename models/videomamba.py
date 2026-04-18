@@ -774,7 +774,7 @@ class VisionMamba(nn.Module):
         # return only cls token
         return hidden_states[:, 0, :]
 
-    def forward(self, x1, x2=None, inference_params=None,  hsic=False):
+    def forward(self, x1, x2=None, inference_params=None, hsic=False, return_view_logits=False):
         features_view1 = self.forward_features(x1, inference_params)  # features_view1 shape: torch.Size([8, 384])
         # print("features_view1 shape:",features_view1.shape)
         if x2 is not None:
@@ -787,16 +787,16 @@ class VisionMamba(nn.Module):
             # alpha2 = torch.relu(self.head(self.head_drop(features_view2)))
     # 方法二：
     #         print("证据融合")
-            alpha1 = self.head(self.head_drop(features_view1))
-            alpha2 = self.head(self.head_drop(features_view2))
-            alpha3= F.softplus(alpha1)
-            alpha4 = F.softplus(alpha2)
+            view1_logits = self.head(self.head_drop(features_view1))
+            view2_logits = self.head(self.head_drop(features_view2))
+            alpha3= F.softplus(view1_logits)
+            alpha4 = F.softplus(view2_logits)
             alphas = torch.stack([alpha3+1, alpha4+1], dim=1)  # [batch_size, 2, num_classes]
             # print("alphas shape:", alphas.shape)
             # fused_cls = GAP(features_view1, features_view2, alphas)
             # print("fused_cls shape:", fused_cls.shape)
             # x = self.head(self.head_drop(fused_cls))
-            x = GAP(alpha1, alpha2, alphas)
+            x = GAP(view1_logits, view2_logits, alphas)
             alpha1 = alpha3
             alpha2 = alpha4
     # 方法三：
@@ -838,6 +838,8 @@ class VisionMamba(nn.Module):
                 # loss_hsic = self.hsic_criterion(cls_token_view1, cls_token_view2)  # 计算HSIC损失
                 return x, loss_hsic
             else:
+                if return_view_logits:
+                    return x, view1_logits, view2_logits, alpha1, alpha2
                 # 方法二：
                 return x,alpha1,alpha2
                 # 方法三

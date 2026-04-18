@@ -78,8 +78,8 @@ The dataset is relatively small, with only a few hundred samples per view, so th
 - base learning rate: `3.2e-3`
 - effective learning rate after repo linear scaling: `1.5e-4`
 - layer decay: `0.8`
-- fc drop rate: `0.1`
-- drop path: `0.2`
+- fc drop rate: `0.0`
+- drop path: `0.1`
 - weight decay: `0.05`
 - warmup epochs: `5`
 - test views: `4` temporal segments x `3` spatial crops
@@ -102,7 +102,11 @@ With `batch_size=6` and `update_freq=2`, the effective batch size is `12`, so:
 
 This keeps the actual optimization step size in the intended range for single-GPU fine-tuning.
 
-The ET launcher now supervises the fused dual-view output and each training view separately. This is important for the current protocol because validation and test are single-view held-out-view evaluations. The previous hard-coded `5 * EDL auxiliary loss + fused CE` objective could dominate the classification signal and make the pretrained backbone look ineffective. If you want to re-enable that auxiliary loss for ablations, set:
+The ET launcher now supervises the fused dual-view output and each training view separately. This is important for the current protocol because validation and test are single-view held-out-view evaluations. The previous hard-coded `5 * EDL auxiliary loss + fused CE` objective could dominate the classification signal and make the pretrained backbone look ineffective.
+
+For classification CE, both the fused output and the per-view outputs are trained from raw logits. The softplus evidence tensors are only used by the optional ET/EDL auxiliary loss. This keeps the training objective aligned with validation/test, where a held-out single view is evaluated through the normal single-view classifier path.
+
+If you want to re-enable that auxiliary loss for ablations, set:
 
 ```bash
 ET_AUX_LOSS_WEIGHT=5.0 bash exp/k400/videomamba_small/run_f16x224_ann_et_local.sh

@@ -104,17 +104,19 @@ def train_class_batch(
     # loss = criterion(outputs, target) + loss_hsic * 0.5
     # print(f"Current epoch: {cur_epoch}")
 
-    outputs, alpha1, alpha2 = model(samples_view1, samples_view2)
+    model_outputs = model(samples_view1, samples_view2, return_view_logits=True)
+    outputs, view1_logits, view2_logits = model_outputs[:3]
     num_classes = outputs.shape[-1]
     total_loss = criterion(outputs, target)
 
     if view_ce_loss_weight > 0:
-        view_ce_loss = 0.5 * (criterion(alpha1, target) + criterion(alpha2, target))
+        view_ce_loss = 0.5 * (criterion(view1_logits, target) + criterion(view2_logits, target))
         total_loss = total_loss + view_ce_loss_weight * view_ce_loss
 
     if et_aux_loss_weight > 0:
-        et_aux_loss = ce_loss(target, alpha1 + 1, num_classes, cur_epoch, et_aux_annealing_step) + \
-                      ce_loss(target, alpha2 + 1, num_classes, cur_epoch, et_aux_annealing_step)
+        view1_evidence, view2_evidence = model_outputs[3], model_outputs[4]
+        et_aux_loss = ce_loss(target, view1_evidence + 1, num_classes, cur_epoch, et_aux_annealing_step) + \
+                      ce_loss(target, view2_evidence + 1, num_classes, cur_epoch, et_aux_annealing_step)
         total_loss = total_loss + et_aux_loss_weight * et_aux_loss
 
 
