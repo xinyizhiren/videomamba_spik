@@ -276,7 +276,7 @@ def print_run_summary(args):
         "fused_ce_loss_weight", "view_ce_loss_weight", "et_aux_loss_weight",
         "aa", "train_crop_min_scale", "train_crop_max_scale",
         "disable_train_flip", "debug_overfit_samples", "log_pred_hist",
-        "bf16", "output_dir"
+        "use_mean_pooling", "bf16", "output_dir"
     ]
     print("Run configuration:")
     for key in keys:
@@ -465,6 +465,7 @@ def main(args, ds_init):
             num_frames=args.num_frames,
             use_checkpoint=args.use_checkpoint,
             checkpoint_num=args.checkpoint_num,
+            use_mean_pooling=args.use_mean_pooling,
         )
     else:
         model = create_model(

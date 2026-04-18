@@ -582,6 +582,7 @@ class VisionMamba(nn.Module):
             # checkpoint
             use_checkpoint=False,
             checkpoint_num=0,
+            use_mean_pooling=True,
 	    pretrained_cfg=None,  # 新增这一行
             # hsic
             hsic_algorithm='unbiased',
@@ -594,8 +595,10 @@ class VisionMamba(nn.Module):
         self.fused_add_norm = fused_add_norm
         self.use_checkpoint = use_checkpoint
         self.checkpoint_num = checkpoint_num
+        self.use_mean_pooling = use_mean_pooling
         print(f'Use checkpoint: {use_checkpoint}')
         print(f'Checkpoint number: {checkpoint_num}')
+        print(f'Use mean pooling: {use_mean_pooling}')
 
         # pretrain parameters
         self.num_classes = num_classes
@@ -768,7 +771,8 @@ class VisionMamba(nn.Module):
                 residual_in_fp32=self.residual_in_fp32,
             )
 
-        # return only cls token
+        if self.use_mean_pooling:
+            return hidden_states[:, 1:, :].mean(dim=1)
         return hidden_states[:, 0, :]
 
     def forward(self, x1, x2=None, inference_params=None, hsic=False, return_view_logits=False):
