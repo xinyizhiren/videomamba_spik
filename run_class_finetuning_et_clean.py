@@ -182,6 +182,27 @@ def strip_prefixes(state):
     return stripped
 
 
+def is_bimamba_reverse_key(key):
+    reverse_markers = (".A_b_log", ".D_b", ".conv1d_b.", ".x_proj_b.", ".dt_proj_b.")
+    return any(marker in key for marker in reverse_markers)
+
+
+def print_checkpoint_structure(checkpoint, state, model_state):
+    if isinstance(checkpoint, dict):
+        top_keys = list(checkpoint.keys())
+        print(f"Checkpoint top-level keys ({len(top_keys)}): {top_keys[:12]}")
+    ckpt_tensor_keys = [key for key, value in state.items() if torch.is_tensor(value)]
+    model_tensor_keys = [key for key, value in model_state.items() if torch.is_tensor(value)]
+    ckpt_reverse_keys = [key for key in ckpt_tensor_keys if is_bimamba_reverse_key(key)]
+    model_reverse_keys = [key for key in model_tensor_keys if is_bimamba_reverse_key(key)]
+    print(
+        "Checkpoint tensors: "
+        f"{len(ckpt_tensor_keys)} total, {len(ckpt_reverse_keys)} BiMamba reverse-branch tensors")
+    print(
+        "Model tensors: "
+        f"{len(model_tensor_keys)} total, {len(model_reverse_keys)} BiMamba reverse-branch tensors")
+
+
 def load_pretrained(model, path, model_key):
     if not path:
         return
@@ -190,6 +211,7 @@ def load_pretrained(model, path, model_key):
     state = strip_prefixes(state)
 
     model_state = model.state_dict()
+    print_checkpoint_structure(checkpoint, state, model_state)
     loadable = OrderedDict()
     skipped = []
     for key, value in state.items():

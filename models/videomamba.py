@@ -18,7 +18,7 @@ from timm.models.vision_transformer import _load_weights
 
 import math
 
-from mamba_ssm.modules.mamba_simple import Mamba
+from .mamba_simple import Mamba
 import torch.nn.functional as F
 
 try:
@@ -253,7 +253,7 @@ def create_block(
     factory_kwargs = {"device": device, "dtype": dtype}
     if ssm_cfg is None:
         ssm_cfg = {}
-    mixer_cls = partial(Mamba, layer_idx=layer_idx, **ssm_cfg, **factory_kwargs)
+    mixer_cls = partial(Mamba, layer_idx=layer_idx, bimamba=bimamba, **ssm_cfg, **factory_kwargs)
     norm_cls = partial(nn.LayerNorm if not rms_norm else RMSNorm, eps=norm_epsilon)
     block = Block(
         d_model,
@@ -262,6 +262,7 @@ def create_block(
         drop_path=drop_path,
         fused_add_norm=fused_add_norm,
         residual_in_fp32=residual_in_fp32,
+        bimamba=bimamba,
     )
     block.layer_idx = layer_idx
     return block

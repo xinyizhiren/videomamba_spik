@@ -41,6 +41,8 @@
 
 clean 链路中 `LR` 就是实际学习率，不再乘以 `batch_size / 256`。
 
+`models/videomamba.py` 已改为使用仓库内的 BiMamba `models/mamba_simple.py`，并把 `bimamba=True` 显式传给 Mamba block。启动时会打印 checkpoint 与模型中的 BiMamba 反向分支 tensor 数量，用于确认预训练权重是否完整加载。
+
 VideoMamba 默认使用 mean pooling：
 
 ```python
@@ -77,3 +79,15 @@ bash exp/k400/videomamba_small/run_f16x224_ann_et_clean.sh
 - 如果 `train_loss` 明显低于 `2.0` 且 `train_fused_acc1` 快速上升，说明训练链路已打通。
 - 如果仍然卡在 `2.30` 左右，则优先检查数据内容、标签、模型特征是否近似常量。
 - 如果训练集已经能 overfit 但 `val_pred_hist` 仍全落到单一类别，说明问题更偏向跨视角泛化。
+
+## 全量训练
+
+确认 sanity check 通过后，直接去掉 `DEBUG_OVERFIT_SAMPLES` 使用全量训练：
+
+```bash
+cd ~/code/VIT_4090/videomamba/video_sm && \
+git pull --ff-only origin main && \
+CUDA_VISIBLE_DEVICES=1 \
+OUTPUT_DIR=./outputs/et_clean_full_v1 \
+bash exp/k400/videomamba_small/run_f16x224_ann_et_clean.sh
+```
