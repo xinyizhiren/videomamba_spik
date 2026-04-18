@@ -339,7 +339,7 @@ class Uncertain():
     def __init__(self, alpha):
         super().__init__()
         self.views = 2
-        self.num_classes = 10 # 记得修改类别数
+        self.num_classes = alpha.shape[-1]
         self.alpha = alpha # alpha shape: [batch_size, 2, num_classes]
 
 

@@ -1,5 +1,6 @@
 import torch
 from torch import optim as optim
+import os
 
 from timm.optim.adafactor import Adafactor
 from timm.optim.adahessian import Adahessian
@@ -34,9 +35,9 @@ def get_num_layer_for_vit(var_name, num_max_layer):
     elif var_name.startswith("transformer.resblocks"):
         layer_id = int(var_name.split('.')[2])
         return layer_id + 1
-    # elif var_name.startswith("layers"): # for VideoMamba
-    #     layer_id = int(var_name.split('.')[1])
-    #     return layer_id + 1
+    elif var_name.startswith("layers"): # for VideoMamba
+        layer_id = int(var_name.split('.')[1])
+        return layer_id + 1
     elif var_name in ("class_embedding", "positional_embedding", "temporal_positional_embedding"):
         return 0
     elif var_name.startswith("conv1"):
@@ -97,7 +98,17 @@ def get_parameter_groups(
 
         parameter_group_vars[group_name]["params"].append(param)
         parameter_group_names[group_name]["params"].append(name)
-    print("Param groups = %s" % json.dumps(parameter_group_names, indent=2))
+    if os.environ.get("VERBOSE_PARAM_GROUPS", "0") == "1":
+        print("Param groups = %s" % json.dumps(parameter_group_names, indent=2))
+    else:
+        tensor_count = sum(len(group["params"]) for group in parameter_group_names.values())
+        lr_scales = sorted({float(group.get("lr_scale", 1.0)) for group in parameter_group_names.values()})
+        if lr_scales:
+            print(
+                "Param groups: {} groups, {} tensors, lr_scale range {:.6g} - {:.6g}".format(
+                    len(parameter_group_names), tensor_count, lr_scales[0], lr_scales[-1]))
+        else:
+            print("Param groups: {} groups, {} tensors".format(len(parameter_group_names), tensor_count))
     return list(parameter_group_vars.values())
 
 

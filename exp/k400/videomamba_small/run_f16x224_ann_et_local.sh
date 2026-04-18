@@ -23,8 +23,10 @@ DISABLE_TRAIN_FLIP="${DISABLE_TRAIN_FLIP:-1}"
 BASE_LR="${BASE_LR:-3.2e-3}"
 MIN_LR="${MIN_LR:-3.2e-5}"
 WARMUP_LR="${WARMUP_LR:-3.2e-6}"
+FUSED_CE_LOSS_WEIGHT="${FUSED_CE_LOSS_WEIGHT:-0.0}"
 VIEW_CE_LOSS_WEIGHT="${VIEW_CE_LOSS_WEIGHT:-1.0}"
 ET_AUX_LOSS_WEIGHT="${ET_AUX_LOSS_WEIGHT:-0.0}"
+PRINT_FREQ="${PRINT_FREQ:-10}"
 
 TRAIN_FLIP_ARGS=()
 if [ "${DISABLE_TRAIN_FLIP}" != "0" ]; then
@@ -68,6 +70,7 @@ python "${PROJECT_DIR}/run_class_finetuning_et.py" \
         --lr "${BASE_LR}" \
         --min_lr "${MIN_LR}" \
         --warmup_lr "${WARMUP_LR}" \
+        --fused_ce_loss_weight "${FUSED_CE_LOSS_WEIGHT}" \
         --view_ce_loss_weight "${VIEW_CE_LOSS_WEIGHT}" \
         --et_aux_loss_weight "${ET_AUX_LOSS_WEIGHT}" \
         --layer_decay 0.8 \
@@ -81,6 +84,7 @@ python "${PROJECT_DIR}/run_class_finetuning_et.py" \
         --test_num_crop 3 \
         --dist_eval \
         --test_best \
+        --print_freq "${PRINT_FREQ}" \
         --bf16 \
         --update_freq 2 \
         "${TRAIN_FLIP_ARGS[@]}" \

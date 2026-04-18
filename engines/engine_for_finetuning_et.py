@@ -93,6 +93,7 @@ def train_class_batch(
         target,
         criterion,
         cur_epoch,
+        fused_ce_loss_weight=1.0,
         view_ce_loss_weight=1.0,
         et_aux_loss_weight=0.0,
         et_aux_annealing_step=10):
@@ -107,17 +108,32 @@ def train_class_batch(
     model_outputs = model(samples_view1, samples_view2, return_view_logits=True)
     outputs, view1_logits, view2_logits = model_outputs[:3]
     num_classes = outputs.shape[-1]
-    total_loss = criterion(outputs, target)
+    if target.ndim == 1:
+        target_min = int(target.min().item())
+        target_max = int(target.max().item())
+        if target_min < 0 or target_max >= num_classes:
+            raise ValueError(
+                f"Target label out of range for {num_classes} classes: "
+                f"min={target_min}, max={target_max}")
+    fused_ce_loss = criterion(outputs, target)
+    total_loss = fused_ce_loss_weight * fused_ce_loss
 
     if view_ce_loss_weight > 0:
         view_ce_loss = 0.5 * (criterion(view1_logits, target) + criterion(view2_logits, target))
         total_loss = total_loss + view_ce_loss_weight * view_ce_loss
+    else:
+        view_ce_loss = outputs.new_zeros(())
 
     if et_aux_loss_weight > 0:
         view1_evidence, view2_evidence = model_outputs[3], model_outputs[4]
         et_aux_loss = ce_loss(target, view1_evidence + 1, num_classes, cur_epoch, et_aux_annealing_step) + \
                       ce_loss(target, view2_evidence + 1, num_classes, cur_epoch, et_aux_annealing_step)
         total_loss = total_loss + et_aux_loss_weight * et_aux_loss
+    else:
+        et_aux_loss = outputs.new_zeros(())
+
+    if fused_ce_loss_weight <= 0 and view_ce_loss_weight <= 0 and et_aux_loss_weight <= 0:
+        raise ValueError("At least one ET training loss weight must be > 0.")
 
 
     # edl_criterion = EDL_Loss(8)  # edl_criterion = EDL_Loss(num_classes)类别
@@ -129,7 +145,12 @@ def train_class_batch(
     # print(f"edlloss value: {loss1}")
     # total_loss = loss1 + loss
 
-    return total_loss, outputs
+    loss_components = {
+        "fused_ce": fused_ce_loss.detach(),
+        "view_ce": view_ce_loss.detach(),
+        "et_aux": et_aux_loss.detach(),
+    }
+    return total_loss, outputs, view1_logits, view2_logits, loss_components
 
 
 # 定义一个函数生成随机边界框
@@ -173,7 +194,8 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                     model_ema: Optional[ModelEma] = None, mixup_fn: Optional[Mixup] = None, log_writer=None,
                     start_steps=None, lr_schedule_values=None, wd_schedule_values=None,
                     num_training_steps_per_epoch=None, update_freq=None, no_amp=False, bf16=False, maxk=5,
-                    view_ce_loss_weight=1.0, et_aux_loss_weight=0.0, et_aux_annealing_step=10):
+                    fused_ce_loss_weight=1.0, view_ce_loss_weight=1.0, et_aux_loss_weight=0.0,
+                    et_aux_annealing_step=10, print_freq=10):
     model.train(True)
     
     # 手动计算GFLOPs (只在第一个epoch执行一次)
@@ -240,8 +262,15 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     metric_logger.add_meter('min_lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
+    for meter_name in (
+            'class_acc', 'acc1', 'acc5', 'fused_acc1', 'fused_acc5',
+            'view1_acc1', 'view1_acc5', 'view2_acc1', 'view2_acc5'):
+        metric_logger.add_meter(
+            meter_name, utils.SmoothedValue(window_size=1, fmt='{value:.4f} ({global_avg:.4f})'))
+    for meter_name in ('fused_correct', 'view1_correct', 'view2_correct', 'batch_n'):
+        metric_logger.add_meter(meter_name, utils.SmoothedValue(window_size=1, fmt='{value:.0f}'))
     header = 'Epoch: [{}]'.format(epoch)
-    print_freq = 1
+    print_freq = max(1, int(print_freq))
 
     if loss_scaler is None:
         model.zero_grad()
@@ -281,8 +310,8 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
         samples_view1 = samples_view1.to(device, non_blocking=True)
         samples_view2 = samples_view2.to(device, non_blocking=True)  # (B , C , T , H , W)
-        if epoch == 0:
-            print("devive:",device)
+        if epoch == 0 and data_iter_step == 0:
+            print("Training device:", device)
         # still_view1 = still_view1.to(device, non_blocking=True)
         # still_view2 = still_view2.to(device, non_blocking=True)
         targets = targets.to(device, non_blocking=True)
@@ -417,26 +446,28 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
         if loss_scaler is None:
             if not no_amp:
-                print("not no_amp")
                 samples_view1 = samples_view1.bfloat16() if bf16 else samples_view1.half()
                 samples_view2 = samples_view2.bfloat16() if bf16 else samples_view2.half()
-            print("loss_scaler is None")
             # 方法二：
             # loss, output = train_class_batch(model, samples_view1, samples_view2, targets, criterion, epoch)
 
             # loss_total1, output = train_class_batch(model, mix_view1, mix_view2, targets, criterion, epoch)
             # baseline：
-            output = model(samples_view1, samples_view2)
-            loss = criterion(output, targets)
-            print(f"?crossloss value: {loss}")
+            loss, output, view1_output, view2_output, loss_components = train_class_batch(
+                model, samples_view1, samples_view2, targets, criterion, epoch,
+                fused_ce_loss_weight=fused_ce_loss_weight,
+                view_ce_loss_weight=view_ce_loss_weight,
+                et_aux_loss_weight=et_aux_loss_weight,
+                et_aux_annealing_step=et_aux_annealing_step)
 
         else:
             # print("loss_scaler is ")
             # 这条线
             with amp_autocast:
                 # 方法二三：
-                loss, output = train_class_batch(
+                loss, output, view1_output, view2_output, loss_components = train_class_batch(
                     model, samples_view1, samples_view2, targets, criterion, epoch,
+                    fused_ce_loss_weight=fused_ce_loss_weight,
                     view_ce_loss_weight=view_ce_loss_weight,
                     et_aux_loss_weight=et_aux_loss_weight,
                     et_aux_annealing_step=et_aux_annealing_step)
@@ -507,19 +538,48 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         torch.cuda.synchronize()
 
         if mixup_fn is None:
-            class_acc = (output.max(-1)[-1] == targets).float().mean()
+            fused_pred = output.max(-1)[-1]
+            view1_pred = view1_output.max(-1)[-1]
+            view2_pred = view2_output.max(-1)[-1]
+            fused_correct = (fused_pred == targets).sum().item()
+            view1_correct = (view1_pred == targets).sum().item()
+            view2_correct = (view2_pred == targets).sum().item()
+            class_acc = (fused_pred == targets).float().mean()
             acc1, acc5 = accuracy(output, targets, topk=(1, maxk))
+            view1_acc1, view1_acc5 = accuracy(view1_output, targets, topk=(1, maxk))
+            view2_acc1, view2_acc5 = accuracy(view2_output, targets, topk=(1, maxk))
         else:
             class_acc = None
             acc1, acc5 = None, None
+            view1_acc1, view1_acc5 = None, None
+            view2_acc1, view2_acc5 = None, None
+            fused_correct, view1_correct, view2_correct = None, None, None
 
         metric_logger.update(loss=loss_value)
+        metric_logger.update(fused_ce_loss=loss_components["fused_ce"].item())
+        metric_logger.update(view_ce_loss=loss_components["view_ce"].item())
+        if et_aux_loss_weight > 0:
+            metric_logger.update(et_aux_loss=loss_components["et_aux"].item())
         metric_logger.update(class_acc=class_acc)
         batch_size = samples_view1.shape[0]
         if acc1 is not None:
             metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
+            metric_logger.meters['fused_acc1'].update(acc1.item(), n=batch_size)
         if acc5 is not None:
             metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
+            metric_logger.meters['fused_acc5'].update(acc5.item(), n=batch_size)
+        if view1_acc1 is not None:
+            metric_logger.meters['view1_acc1'].update(view1_acc1.item(), n=batch_size)
+            metric_logger.meters['view1_acc5'].update(view1_acc5.item(), n=batch_size)
+        if view2_acc1 is not None:
+            metric_logger.meters['view2_acc1'].update(view2_acc1.item(), n=batch_size)
+            metric_logger.meters['view2_acc5'].update(view2_acc5.item(), n=batch_size)
+        if fused_correct is not None:
+            metric_logger.update(
+                fused_correct=fused_correct,
+                view1_correct=view1_correct,
+                view2_correct=view2_correct,
+                batch_n=batch_size)
         metric_logger.update(loss_scale=loss_scale_value)
         min_lr = 10.
         max_lr = 0.
@@ -541,8 +601,16 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             log_writer.update(class_acc=class_acc, head="loss")
             if acc1 is not None:
                 log_writer.update(acc1=acc1.item(), head="loss")
+                log_writer.update(fused_acc1=acc1.item(), head="loss")
             if acc5 is not None:
                 log_writer.update(acc5=acc5.item(), head="loss")
+                log_writer.update(fused_acc5=acc5.item(), head="loss")
+            if view1_acc1 is not None:
+                log_writer.update(view1_acc1=view1_acc1.item(), head="loss")
+                log_writer.update(view1_acc5=view1_acc5.item(), head="loss")
+            if view2_acc1 is not None:
+                log_writer.update(view2_acc1=view2_acc1.item(), head="loss")
+                log_writer.update(view2_acc5=view2_acc5.item(), head="loss")
             log_writer.update(loss_scale=loss_scale_value, head="opt")
             log_writer.update(lr=max_lr, head="opt")
             log_writer.update(min_lr=min_lr, head="opt")
@@ -637,6 +705,7 @@ def final_test(data_loader, model, device, file, amp_autocast, ds=True, no_amp=F
     all_preds = []
     all_labels = []
     all_features = []
+    enable_gradcam = False
     # 初始化全局变量
 
     # # 注册钩子以获取中间层特征和梯度
@@ -651,12 +720,10 @@ def final_test(data_loader, model, device, file, amp_autocast, ds=True, no_amp=F
     def get_features_hook(module, input, output):
         global features
         features = output
-        print(f"Forward hook triggered! Features shape: {output.shape}")
 
     def get_gradients_hook(module, grad_in, grad_out):
         global gradients
         gradients = grad_out[0] if grad_out and grad_out[0] is not None else None
-        print(f"Backward hook triggered! Gradients shape: {gradients.shape if gradients is not None else 'None'}")
 
 
 
@@ -677,8 +744,9 @@ def final_test(data_loader, model, device, file, amp_autocast, ds=True, no_amp=F
     #     target_layer = base_model.patch_embed.proj
     #     print("Using target_layer: patch_embed.proj")
 
-    target_layer.register_forward_hook(get_features_hook)
-    target_layer.register_full_backward_hook(get_gradients_hook)
+    if enable_gradcam:
+        target_layer.register_forward_hook(get_features_hook)
+        target_layer.register_full_backward_hook(get_gradients_hook)
 
 
 
@@ -847,7 +915,6 @@ def final_test(data_loader, model, device, file, amp_autocast, ds=True, no_amp=F
             })
 
         acc1, acc5 = accuracy(output, target, topk=(1, maxk))
-        print("acc1:", acc1)
 
         batch_size = videos_view1.shape[0]
         metric_logger.update(loss=loss.item())

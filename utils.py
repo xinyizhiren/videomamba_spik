@@ -387,15 +387,28 @@ def load_state_dict(model, state_dict, prefix='', ignore_missing="relative_posit
 
     missing_keys = warn_missing_keys
 
+    def _print_key_summary(message, keys):
+        if os.environ.get("VERBOSE_CHECKPOINT_KEYS", "0") == "1":
+            print("{}: {}".format(message, keys))
+            return
+        preview = keys[:12]
+        suffix = "" if len(keys) <= len(preview) else " ..."
+        print("{}: {} keys{}".format(message, len(keys), suffix))
+        if preview:
+            print("  first keys: {}".format(preview))
+
     if len(missing_keys) > 0:
-        print("Weights of {} not initialized from pretrained model: {}".format(
-            model.__class__.__name__, missing_keys))
+        _print_key_summary(
+            "Weights of {} not initialized from pretrained model".format(model.__class__.__name__),
+            missing_keys)
     if len(unexpected_keys) > 0:
-        print("Weights from pretrained model not used in {}: {}".format(
-            model.__class__.__name__, unexpected_keys))
+        _print_key_summary(
+            "Weights from pretrained model not used in {}".format(model.__class__.__name__),
+            unexpected_keys)
     if len(ignore_missing_keys) > 0:
-        print("Ignored weights of {} not initialized from pretrained model: {}".format(
-            model.__class__.__name__, ignore_missing_keys))
+        _print_key_summary(
+            "Ignored weights of {} not initialized from pretrained model".format(model.__class__.__name__),
+            ignore_missing_keys)
     if len(error_msgs) > 0:
         print('\n'.join(error_msgs))
 

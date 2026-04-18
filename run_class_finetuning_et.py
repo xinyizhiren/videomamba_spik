@@ -52,6 +52,8 @@ def get_args():
                         help='Attention dropout rate (default: 0.)')
     parser.add_argument('--drop_path', type=float, default=0.1, metavar='PCT',
                         help='Drop path rate (default: 0.1)')
+    parser.add_argument('--fused_ce_loss_weight', type=float, default=1.0,
+                        help='Weight for fused dual-view CE supervision in ET training')
     parser.add_argument('--view_ce_loss_weight', type=float, default=1.0,
                         help='Weight for per-view CE supervision in dual-view ET training')
     parser.add_argument('--et_aux_loss_weight', type=float, default=0.0,
@@ -221,6 +223,8 @@ def get_args():
     parser.add_argument('--dist_eval', action='store_true', default=False,
                         help='Enabling distributed evaluation')
     parser.add_argument('--num_workers', default=10, type=int)
+    parser.add_argument('--print_freq', default=10, type=int,
+                        help='Training log print frequency in iterations')
     parser.add_argument('--pin_mem', action='store_true',
                         help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
     parser.add_argument('--no_pin_mem', action='store_false', dest='pin_mem')
@@ -256,13 +260,28 @@ def get_args():
     return parser.parse_args(), ds_init
 
 
+def print_run_summary(args):
+    keys = [
+        "model", "finetune", "resume", "auto_resume", "data_set", "data_path",
+        "train_view1_csv", "train_view2_csv", "val_view_csv", "test_view_csv",
+        "nb_classes", "num_frames", "sampling_rate", "batch_size", "update_freq",
+        "epochs", "lr", "min_lr", "warmup_lr", "layer_decay",
+        "fused_ce_loss_weight", "view_ce_loss_weight", "et_aux_loss_weight",
+        "aa", "train_crop_min_scale", "train_crop_max_scale",
+        "disable_train_flip", "bf16", "output_dir"
+    ]
+    print("Run configuration:")
+    for key in keys:
+        print(f"  {key}: {getattr(args, key, None)}")
+
+
 def main(args, ds_init):
     utils.init_distributed_mode(args)
 
     if ds_init is not None:
         utils.create_ds_config(args)
 
-    print(args)
+    print_run_summary(args)
 
     device = torch.device(args.device)
 
@@ -545,8 +564,12 @@ def main(args, ds_init):
     model_without_ddp = model
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-    print("Model = %s" % str(model_without_ddp))
-    print('number of params:', n_parameters)
+    model_depth = len(model_without_ddp.layers) if hasattr(model_without_ddp, "layers") else "n/a"
+    model_embed_dim = getattr(model_without_ddp, "embed_dim", "n/a")
+    print(
+        f"Model: {args.model} ({model_without_ddp.__class__.__name__}), "
+        f"params={n_parameters / 1e6:.2f}M, depth={model_depth}, "
+        f"embed_dim={model_embed_dim}, classes={args.nb_classes}")
 
     total_batch_size = args.batch_size * args.update_freq * utils.get_world_size()
     num_training_steps_per_epoch = len(dataset_train) // total_batch_size
@@ -568,7 +591,9 @@ def main(args, ds_init):
         assigner = None
 
     if assigner is not None:
-        print("Assigned values = %s" % str(assigner.values))
+        print(
+            "Layer decay scales: {} values, range {:.6g} - {:.6g}".format(
+                len(assigner.values), min(assigner.values), max(assigner.values)))
 
     skip_weight_decay_list = model.no_weight_decay()
     print("Skip weight decay list: ", skip_weight_decay_list)
@@ -666,9 +691,11 @@ def main(args, ds_init):
             num_training_steps_per_epoch=num_training_steps_per_epoch, update_freq=args.update_freq,
             no_amp=args.no_amp, bf16=args.bf16,
             maxk=5 if args.nb_classes >= 5 else 1,
+            fused_ce_loss_weight=args.fused_ce_loss_weight,
             view_ce_loss_weight=args.view_ce_loss_weight,
             et_aux_loss_weight=args.et_aux_loss_weight,
-            et_aux_annealing_step=args.et_aux_annealing_step
+            et_aux_annealing_step=args.et_aux_annealing_step,
+            print_freq=args.print_freq
         )
         if args.output_dir and args.save_ckpt:
             # if (epoch + 1) % args.save_ckpt_freq == 0 or epoch + 1 == args.epochs:
