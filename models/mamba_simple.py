@@ -15,10 +15,23 @@ try:
 except ImportError:
     causal_conv1d_fn, causal_conv1d_update = None
 
+_SELECTIVE_SCAN_IMPORT_ERROR = None
 try:
-    from mamba_ssm.ops.selective_scan_interface import selective_scan_fn, mamba_inner_fn, bimamba_inner_fn, mamba_inner_fn_no_out_proj
+    from mamba_ssm.ops.selective_scan_interface import (
+        selective_scan_fn,
+        mamba_inner_fn,
+        mamba_inner_fn_no_out_proj,
+    )
+except ImportError as exc:
+    selective_scan_fn, mamba_inner_fn, mamba_inner_fn_no_out_proj = None, None, None
+    _SELECTIVE_SCAN_IMPORT_ERROR = exc
+
+try:
+    from mamba_ssm.ops.selective_scan_interface import bimamba_inner_fn
 except ImportError:
-    selective_scan_fn, mamba_inner_fn, bimamba_inner_fn, mamba_inner_fn_no_out_proj = None, None, None, None, None
+    # Some mamba-ssm builds do not export this helper. This implementation uses
+    # mamba_inner_fn_no_out_proj for BiMamba, so keep the missing optional symbol non-fatal.
+    bimamba_inner_fn = None
 
 try:
     from mamba_ssm.ops.triton.selective_state_update import selective_state_update
@@ -181,6 +194,12 @@ class Mamba(nn.Module):
         # In the backward pass we write dx and dz next to each other to avoid torch.cat
         if self.use_fast_path and inference_params is None:  # Doesn't support outputting the states
             if self.bimamba:
+                if mamba_inner_fn_no_out_proj is None:
+                    raise RuntimeError(
+                        "BiMamba requires mamba_inner_fn_no_out_proj from "
+                        "mamba_ssm.ops.selective_scan_interface. Please install a compatible "
+                        f"mamba-ssm build. Original import error: {_SELECTIVE_SCAN_IMPORT_ERROR!r}"
+                    )
                 A_b = -torch.exp(self.A_b_log.float())
                 out = mamba_inner_fn_no_out_proj(
                     xz,
@@ -210,6 +229,12 @@ class Mamba(nn.Module):
                 )
                 out = F.linear(rearrange(out + out_b.flip([-1]), "b d l -> b l d"), self.out_proj.weight, self.out_proj.bias)
             else:
+                if mamba_inner_fn is None:
+                    raise RuntimeError(
+                        "Mamba fast path requires mamba_inner_fn from "
+                        "mamba_ssm.ops.selective_scan_interface. Please install a compatible "
+                        f"mamba-ssm build. Original import error: {_SELECTIVE_SCAN_IMPORT_ERROR!r}"
+                    )
                 out = mamba_inner_fn(
                     xz,
                     self.conv1d.weight,
@@ -226,6 +251,17 @@ class Mamba(nn.Module):
                     delta_softplus=True,
                 )
         else:
+            if selective_scan_fn is None:
+                raise RuntimeError(
+                    "Mamba slow path requires selective_scan_fn from "
+                    "mamba_ssm.ops.selective_scan_interface. Please install a compatible "
+                    f"mamba-ssm build. Original import error: {_SELECTIVE_SCAN_IMPORT_ERROR!r}"
+                )
+            if self.bimamba:
+                raise RuntimeError(
+                    "BiMamba slow path is not implemented in models/mamba_simple.py. "
+                    "Use the fused fast path with a compatible mamba-ssm build."
+                )
             x, z = xz.chunk(2, dim=1)
             # Compute short convolution
             if conv_state is not None:
