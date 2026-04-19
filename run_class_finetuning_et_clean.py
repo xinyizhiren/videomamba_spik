@@ -27,6 +27,7 @@ def get_args():
     parser.add_argument("--train_view1_csv", default="aligned_v01_1.csv")
     parser.add_argument("--train_view2_csv", default="aligned_v02_2.csv")
     parser.add_argument("--val_view_csv", default="v03_val_set.csv")
+    parser.add_argument("--test_view_csv", default="v03_test_set.csv")
     parser.add_argument("--nb_classes", default=12, type=int)
 
     parser.add_argument("--output_dir", required=True)
@@ -51,6 +52,9 @@ def get_args():
     parser.add_argument("--view_ce_loss_weight", default=1.0, type=float)
     parser.add_argument("--print_freq", default=10, type=int)
     parser.add_argument("--debug_overfit_samples", default=0, type=int)
+    parser.add_argument("--eval", action="store_true", help="Run evaluation only.")
+    parser.add_argument("--eval_split", default="test", choices=("validation", "test"))
+    parser.add_argument("--eval_checkpoint", default="", help="Checkpoint path for eval-only mode.")
 
     parser.add_argument("--input_size", default=224, type=int)
     parser.add_argument("--short_side_size", default=224, type=int)
@@ -143,8 +147,9 @@ def make_dataset(args, mode):
             transform=transform,
             random_temporal=not deterministic_debug,
         )
-    elif mode == "validation":
-        anno_view1 = os.path.join(args.data_path, args.val_view_csv)
+    elif mode in ("validation", "test"):
+        csv_name = args.val_view_csv if mode == "validation" else args.test_view_csv
+        anno_view1 = os.path.join(args.data_path, csv_name)
         transform = VideoTransform(
             crop_size=args.input_size,
             short_side_size=args.short_side_size,
@@ -258,6 +263,21 @@ def load_resume(model, optimizer, scheduler, path, device):
     best_acc1 = float(checkpoint.get("best_acc1", 0.0))
     print(f"Resumed from {path}; start_epoch={start_epoch}; best_acc1={best_acc1:.2f}")
     return start_epoch, best_acc1
+
+
+def load_eval_checkpoint(model, path, device):
+    if not path:
+        raise ValueError("--eval requires --eval_checkpoint or --resume")
+    checkpoint = torch.load(path, map_location=device)
+    state = checkpoint.get("model", checkpoint)
+    msg = model.load_state_dict(state, strict=False)
+    epoch = checkpoint.get("epoch", "unknown") if isinstance(checkpoint, dict) else "unknown"
+    best_acc1 = checkpoint.get("best_acc1", None) if isinstance(checkpoint, dict) else None
+    print(f"Loaded eval checkpoint: {path}")
+    print(f"Eval checkpoint epoch: {epoch}")
+    if best_acc1 is not None:
+        print(f"Eval checkpoint best_acc1: {float(best_acc1):.2f}")
+    print(f"Eval missing keys: {len(msg.missing_keys)}; unexpected keys: {len(msg.unexpected_keys)}")
 
 
 def make_scheduler(optimizer, args):
@@ -424,9 +444,9 @@ def validate(model, loader, criterion, device, args):
     return stats
 
 
-def write_log(args, stats):
+def write_log(args, stats, filename="log.txt"):
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-    with open(Path(args.output_dir) / "log.txt", "a", encoding="utf-8") as f:
+    with open(Path(args.output_dir) / filename, "a", encoding="utf-8") as f:
         f.write(json.dumps(stats, ensure_ascii=False) + "\n")
 
 
@@ -443,31 +463,36 @@ def main():
     for key in sorted(vars(args)):
         print(f"  {key}: {getattr(args, key)}")
 
-    train_dataset = make_dataset(args, "train")
-    if args.debug_overfit_samples > 0:
-        sample_count = min(len(train_dataset), max(args.debug_overfit_samples, args.batch_size))
-        indices = balanced_subset_indices(train_dataset, sample_count, args.seed)
-        labels = [label_key(train_dataset.label_array[index]) for index in indices]
-        label_hist = OrderedDict()
-        for label in labels:
-            label_hist[label] = label_hist.get(label, 0) + 1
-        train_dataset = torch.utils.data.Subset(train_dataset, indices)
-        print(f"Debug balanced subset: {len(indices)} samples; class histogram: {dict(label_hist)}")
-    val_dataset = make_dataset(args, "validation")
+    if args.eval:
+        train_dataset = None
+        val_dataset = make_dataset(args, args.eval_split)
+    else:
+        train_dataset = make_dataset(args, "train")
+        if args.debug_overfit_samples > 0:
+            sample_count = min(len(train_dataset), max(args.debug_overfit_samples, args.batch_size))
+            indices = balanced_subset_indices(train_dataset, sample_count, args.seed)
+            labels = [label_key(train_dataset.label_array[index]) for index in indices]
+            label_hist = OrderedDict()
+            for label in labels:
+                label_hist[label] = label_hist.get(label, 0) + 1
+            train_dataset = torch.utils.data.Subset(train_dataset, indices)
+            print(f"Debug balanced subset: {len(indices)} samples; class histogram: {dict(label_hist)}")
+        val_dataset = make_dataset(args, "validation")
     loader_generator = torch.Generator()
     loader_generator.manual_seed(args.seed)
 
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=args.num_workers,
-        pin_memory=args.pin_mem,
-        drop_last=True,
-        persistent_workers=args.num_workers > 0,
-        worker_init_fn=seed_worker,
-        generator=loader_generator,
-    )
+    if not args.eval:
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=args.batch_size,
+            shuffle=True,
+            num_workers=args.num_workers,
+            pin_memory=args.pin_mem,
+            drop_last=True,
+            persistent_workers=args.num_workers > 0,
+            worker_init_fn=seed_worker,
+            generator=loader_generator,
+        )
     val_loader = torch.utils.data.DataLoader(
         val_dataset,
         batch_size=max(1, int(1.5 * args.batch_size)),
@@ -488,10 +513,33 @@ def main():
         drop_path=args.drop_path,
         use_mean_pooling=args.use_mean_pooling,
     )
-    load_pretrained(model, args.finetune, args.model_key)
+    eval_checkpoint = args.eval_checkpoint or args.resume
+    if not (args.eval and eval_checkpoint):
+        load_pretrained(model, args.finetune, args.model_key)
     model.to(device)
 
     criterion = torch.nn.CrossEntropyLoss()
+    if args.eval:
+        if eval_checkpoint:
+            load_eval_checkpoint(model, eval_checkpoint, device)
+        elif not args.finetune:
+            raise ValueError("--eval requires either --eval_checkpoint, --resume, or --finetune")
+        eval_stats = validate(model, val_loader, criterion, device, args)
+        stats = {
+            "mode": "eval",
+            "split": args.eval_split,
+            "checkpoint": eval_checkpoint or args.finetune,
+            **eval_stats,
+        }
+        write_log(args, stats, filename=f"{args.eval_split}_log.txt")
+        print(
+            f"Eval {args.eval_split}: "
+            f"acc1={stats['val_acc1']:.2f} "
+            f"acc5={stats['val_acc5']:.2f} "
+            f"loss={stats['val_loss']:.4f}"
+        )
+        return
+
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = make_scheduler(optimizer, args)
     scaler = torch.cuda.amp.GradScaler(enabled=False)

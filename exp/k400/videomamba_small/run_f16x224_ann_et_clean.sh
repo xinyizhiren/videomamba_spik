@@ -5,7 +5,7 @@ export OMP_NUM_THREADS=1
 export PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True'
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1}"
 
-JOB_NAME='videomamba_small_cv_train12_test3_ann_clean_bimamba_official'
+JOB_NAME='videomamba_small_cv_train12_test3_ann_clean_full'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
