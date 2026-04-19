@@ -5,7 +5,7 @@ export OMP_NUM_THREADS=1
 export PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True'
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 
-JOB_NAME='videomamba_small_cv_train12_test3_ann_clean_full'
+JOB_NAME='videomamba_small_cv_train12_test3_ann_clean_bimamba_official'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
@@ -17,10 +17,10 @@ MODEL_PATH="${MODEL_PATH:-${PROJECT_DIR}/videomamba_s16_k400_f16_res224.pth}"
 RESUME_PATH="${RESUME_PATH:-}"
 
 BATCH_SIZE="${BATCH_SIZE:-6}"
-EPOCHS="${EPOCHS:-80}"
-LR="${LR:-3e-4}"
+EPOCHS="${EPOCHS:-40}"
+LR="${LR:-2e-4}"
 MIN_LR="${MIN_LR:-1e-6}"
-WARMUP_EPOCHS="${WARMUP_EPOCHS:-5}"
+WARMUP_EPOCHS="${WARMUP_EPOCHS:-3}"
 WEIGHT_DECAY="${WEIGHT_DECAY:-0.05}"
 DROP_PATH="${DROP_PATH:-0.1}"
 UPDATE_FREQ="${UPDATE_FREQ:-1}"
