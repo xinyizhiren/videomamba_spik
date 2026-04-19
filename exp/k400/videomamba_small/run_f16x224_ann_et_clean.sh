@@ -3,7 +3,7 @@
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS=1
 export PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True'
-export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1}"
 
 JOB_NAME='videomamba_small_cv_train12_test3_ann_clean_bimamba_official'
 
@@ -18,7 +18,7 @@ RESUME_PATH="${RESUME_PATH:-}"
 
 BATCH_SIZE="${BATCH_SIZE:-6}"
 EPOCHS="${EPOCHS:-40}"
-LR="${LR:-2e-4}"
+LR="${LR:-1e-4}"
 MIN_LR="${MIN_LR:-1e-6}"
 WARMUP_EPOCHS="${WARMUP_EPOCHS:-3}"
 WEIGHT_DECAY="${WEIGHT_DECAY:-0.05}"
