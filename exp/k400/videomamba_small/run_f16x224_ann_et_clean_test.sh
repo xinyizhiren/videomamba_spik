@@ -3,24 +3,31 @@
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS=1
 export PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True'
+# 默认使用第 1 张 GPU；临时换卡可在命令前覆盖 CUDA_VISIBLE_DEVICES。
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
+# TRAIN_OUTPUT_DIR 指向 clean 训练输出；默认从其中读取 best.pth。
 TRAIN_OUTPUT_DIR="${TRAIN_OUTPUT_DIR:-${PROJECT_DIR}/outputs/videomamba_small_cv_train12_test3_ann_clean_full}"
+# OUTPUT_DIR 默认复用训练目录，评估日志会写到 test_log.txt 或 validation_log.txt。
 OUTPUT_DIR="${OUTPUT_DIR:-${TRAIN_OUTPUT_DIR}}"
 CHECKPOINT_PATH="${CHECKPOINT_PATH:-${TRAIN_OUTPUT_DIR}/best.pth}"
 
+# DATA_PATH 放 CSV 标注文件，PREFIX 是 CSV 中相对视频路径的根目录。
 PREFIX="${PREFIX:-/data_hdd/oyys/VIT_4090/dataset/data/multiview_action_videos/}"
 DATA_PATH="${DATA_PATH:-/data_hdd/oyys/VIT_4090/dataset/data/multiview_action_videos/}"
+# MODEL_PATH 只在未显式提供评估 checkpoint 时作为 fallback 初始化来源。
 MODEL_PATH="${MODEL_PATH:-${PROJECT_DIR}/videomamba_s16_k400_f16_res224.pth}"
 
 BATCH_SIZE="${BATCH_SIZE:-6}"
+# EVAL_SPLIT 可选 test 或 validation；正式测试默认读取 v03_test_set.csv。
 EVAL_SPLIT="${EVAL_SPLIT:-test}"
 TEST_VIEW_CSV="${TEST_VIEW_CSV:-v03_test_set.csv}"
 VAL_VIEW_CSV="${VAL_VIEW_CSV:-v03_val_set.csv}"
 
+# 评估复用 clean 训练入口，仅通过 --eval 切换到单视角验证/测试流程。
 python "${PROJECT_DIR}/run_class_finetuning_et_clean.py" \
         --eval \
         --eval_split "${EVAL_SPLIT}" \

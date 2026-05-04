@@ -3,35 +3,47 @@
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS=1
 export PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True'
+# 历史本地实验默认用第 0 张 GPU；临时换卡可覆盖 CUDA_VISIBLE_DEVICES。
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 
+# local 是旧 ET 训练链路的实验名，主要用于复现/对照历史结果。
 JOB_NAME='videomamba_small_cv_train12_test3_ann'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+# 旧入口会分别写 TensorBoard 日志和 checkpoint。
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_DIR}/outputs/${JOB_NAME}}"
 LOG_DIR="${LOG_DIR:-${PROJECT_DIR}/logs/${JOB_NAME}}"
 
+# DATA_PATH 放 CSV 标注文件，PREFIX 是 CSV 中相对视频路径的根目录。
 PREFIX="${PREFIX:-/data_hdd/oyys/VIT_4090/dataset/data/multiview_action_videos/}"
 DATA_PATH="${DATA_PATH:-/data_hdd/oyys/VIT_4090/dataset/data/multiview_action_videos/}"
+# MODEL_PATH 是 K400 预训练权重；RESUME_PATH 显式指定时才从旧 checkpoint 续训。
 MODEL_PATH="${MODEL_PATH:-${PROJECT_DIR}/videomamba_s16_k400_f16_res224.pth}"
 RESUME_PATH="${RESUME_PATH:-}"
+# 旧链路仍保留 AutoAugment 开关，默认关闭以减少小数据集上的扰动。
 AUTO_AUG="${AUTO_AUG:-none}"
 TRAIN_CROP_MIN_SCALE="${TRAIN_CROP_MIN_SCALE:-0.50}"
 TRAIN_CROP_MAX_SCALE="${TRAIN_CROP_MAX_SCALE:-1.0}"
+# 默认关闭水平翻转，因为跨视角动作数据里左右关系可能有语义。
 DISABLE_TRAIN_FLIP="${DISABLE_TRAIN_FLIP:-1}"
+# 旧入口会按 total_batch_size / 256 线性缩放 BASE_LR、MIN_LR、WARMUP_LR。
 BASE_LR="${BASE_LR:-3.2e-3}"
 MIN_LR="${MIN_LR:-3.2e-5}"
 WARMUP_LR="${WARMUP_LR:-3.2e-6}"
 EPOCHS="${EPOCHS:-80}"
+# LAYER_DECAY 给浅层 backbone 更小学习率，DROP_PATH 是 stochastic depth 强度。
 LAYER_DECAY="${LAYER_DECAY:-0.8}"
 WEIGHT_DECAY="${WEIGHT_DECAY:-0.05}"
 DROP_PATH="${DROP_PATH:-0.1}"
+# local 默认只监督两个单视角 CE，保留 fused/ET 辅助损失开关用于消融。
 FUSED_CE_LOSS_WEIGHT="${FUSED_CE_LOSS_WEIGHT:-0.0}"
 VIEW_CE_LOSS_WEIGHT="${VIEW_CE_LOSS_WEIGHT:-1.0}"
 ET_AUX_LOSS_WEIGHT="${ET_AUX_LOSS_WEIGHT:-0.0}"
 PRINT_FREQ="${PRINT_FREQ:-10}"
+# 设为非 0 时只取均衡小样本训练，用于快速 overfit/sanity check。
 DEBUG_OVERFIT_SAMPLES="${DEBUG_OVERFIT_SAMPLES:-0}"
+# 记录各类别预测直方图，排查预测坍缩时很有用。
 LOG_PRED_HIST="${LOG_PRED_HIST:-1}"
 
 TRAIN_FLIP_ARGS=()
@@ -54,6 +66,8 @@ if [ "${DEBUG_OVERFIT_SAMPLES}" != "0" ]; then
         OVERFIT_ARGS=(--debug_overfit_samples "${DEBUG_OVERFIT_SAMPLES}")
 fi
 
+# 注意：这是历史 local 链路，入口是 run_class_finetuning_et.py；
+# 正式 clean 训练请使用 run_f16x224_ann_et_clean.sh。
 python "${PROJECT_DIR}/run_class_finetuning_et.py" \
         --model videomamba_small \
         --finetune "${MODEL_PATH}" \
