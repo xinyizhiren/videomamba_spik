@@ -4,13 +4,16 @@
 
 ## 本次修改范围
 
-本次只做脚本注释和说明文档整理，没有改动训练逻辑、模型结构、数据读取或默认超参数。
+本次修改以脚本和工具补充为主，没有改动核心训练逻辑、模型结构或数据集类实现。
 
 已修改：
 
 - `exp/k400/videomamba_small/run_f16x224_ann_et_clean.sh`
 - `exp/k400/videomamba_small/run_f16x224_ann_et_clean_test.sh`
 - `exp/k400/videomamba_small/run_f16x224_ann_et_local.sh`
+- `exp/k400/videomamba_small/run_f16x224_ann_et_clean_valtest.sh`
+- `exp/k400/videomamba_small/run_f16x224_ann_et_clean_valtest_test.sh`
+- `tools/merge_val_test_csv.py`
 - `TRAINING_CHAIN_MODIFICATIONS.md`
 
 主要修改内容：
@@ -19,6 +22,9 @@
 - 明确标注 `clean.sh` 是正式 clean 训练入口。
 - 明确标注 `clean_test.sh` 是复用 clean 入口的评估脚本。
 - 明确标注 `local.sh` 是旧 ET 本地实验链路，主要用于历史结果复现和对照。
+- 将默认数据路径更新到新服务器目录。
+- 新增 val+test 合并验证链路，保留原 clean 链路。
+- 新增合并 `v03_val_set.csv` 和 `v03_test_set.csv` 的工具脚本。
 
 ## 三个脚本对应关系
 
@@ -189,3 +195,74 @@ WEIGHT_DECAY=0 \
 DROP_PATH=0 \
 bash exp/k400/videomamba_small/run_f16x224_ann_et_clean.sh
 ```
+
+## 新服务器路径
+
+2026-05-04 后，脚本默认数据路径更新为：
+
+```bash
+/data/users/ouyangys/data/multiview_action_videos/
+```
+
+涉及默认变量：
+
+- `PREFIX`
+- `DATA_PATH`
+
+`MODEL_PATH` 仍默认读取项目根目录下的：
+
+```bash
+${PROJECT_DIR}/videomamba_s16_k400_f16_res224.pth
+```
+
+## val+test 合并验证链路
+
+小数据集上，如果验证集和测试集都很小，单独保留两份 held-out 数据会让验证指标波动很大。当前新增一条独立链路，把 view3 的 validation 和 test CSV 合并成一个 held-out 集合，用它做训练过程中的 validation，也可用于最后评估。
+
+保留原链路：
+
+- `run_f16x224_ann_et_clean.sh`
+- `run_f16x224_ann_et_clean_test.sh`
+
+新增链路：
+
+- `exp/k400/videomamba_small/run_f16x224_ann_et_clean_valtest.sh`
+- `exp/k400/videomamba_small/run_f16x224_ann_et_clean_valtest_test.sh`
+- `tools/merge_val_test_csv.py`
+
+默认合并：
+
+```text
+v03_val_set.csv + v03_test_set.csv -> v03_val_test_set.csv
+```
+
+新增训练脚本会在启动前检查 `v03_val_test_set.csv` 是否存在。默认 `CREATE_MERGED_CSV=1`，如果不存在就调用：
+
+```bash
+python tools/merge_val_test_csv.py \
+  --data-path /data/users/ouyangys/data/multiview_action_videos/ \
+  --val-csv v03_val_set.csv \
+  --test-csv v03_test_set.csv \
+  --output-csv v03_val_test_set.csv
+```
+
+如果你已经手动准备好了合并 CSV，可以关闭自动生成：
+
+```bash
+CREATE_MERGED_CSV=0 \
+bash exp/k400/videomamba_small/run_f16x224_ann_et_clean_valtest.sh
+```
+
+运行新增训练链路：
+
+```bash
+bash exp/k400/videomamba_small/run_f16x224_ann_et_clean_valtest.sh
+```
+
+运行新增评估链路：
+
+```bash
+bash exp/k400/videomamba_small/run_f16x224_ann_et_clean_valtest_test.sh
+```
+
+注意：val+test 合并后，指标更适合作为小数据集上的稳定 held-out 估计。如果要写论文或报告最终结果，最好仍保留一个完全未参与模型选择的最终测试集。

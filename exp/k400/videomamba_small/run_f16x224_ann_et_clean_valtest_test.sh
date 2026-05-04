@@ -9,25 +9,41 @@ export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
-# TRAIN_OUTPUT_DIR 指向 clean 训练输出；默认从其中读取 best.pth。
-TRAIN_OUTPUT_DIR="${TRAIN_OUTPUT_DIR:-${PROJECT_DIR}/outputs/videomamba_small_cv_train12_test3_ann_clean_full}"
-# OUTPUT_DIR 默认复用训练目录，评估日志会写到 test_log.txt 或 validation_log.txt。
+# 对应 run_f16x224_ann_et_clean_valtest.sh 的输出目录。
+TRAIN_OUTPUT_DIR="${TRAIN_OUTPUT_DIR:-${PROJECT_DIR}/outputs/videomamba_small_cv_train12_valtest_ann_clean_full}"
 OUTPUT_DIR="${OUTPUT_DIR:-${TRAIN_OUTPUT_DIR}}"
 CHECKPOINT_PATH="${CHECKPOINT_PATH:-${TRAIN_OUTPUT_DIR}/best.pth}"
 
-# DATA_PATH 放 CSV 标注文件，PREFIX 是 CSV 中相对视频路径的根目录。
+# 新服务器默认数据目录；DATA_PATH 放 CSV，PREFIX 是 CSV 中相对视频路径的根目录。
 PREFIX="${PREFIX:-/data/users/ouyangys/data/multiview_action_videos/}"
 DATA_PATH="${DATA_PATH:-/data/users/ouyangys/data/multiview_action_videos/}"
-# MODEL_PATH 只在未显式提供评估 checkpoint 时作为 fallback 初始化来源。
 MODEL_PATH="${MODEL_PATH:-${PROJECT_DIR}/videomamba_s16_k400_f16_res224.pth}"
 
-BATCH_SIZE="${BATCH_SIZE:-6}"
-# EVAL_SPLIT 可选 test 或 validation；正式测试默认读取 v03_test_set.csv。
-EVAL_SPLIT="${EVAL_SPLIT:-test}"
-TEST_VIEW_CSV="${TEST_VIEW_CSV:-v03_test_set.csv}"
 VAL_VIEW_CSV="${VAL_VIEW_CSV:-v03_val_set.csv}"
+TEST_VIEW_CSV="${TEST_VIEW_CSV:-v03_test_set.csv}"
+MERGED_VIEW_CSV="${MERGED_VIEW_CSV:-v03_val_test_set.csv}"
+CREATE_MERGED_CSV="${CREATE_MERGED_CSV:-1}"
 
-# 评估复用 clean 训练入口，仅通过 --eval 切换到单视角验证/测试流程。
+BATCH_SIZE="${BATCH_SIZE:-6}"
+# validation 或 test 都会读取同一个合并 CSV，默认记为 test 日志。
+EVAL_SPLIT="${EVAL_SPLIT:-test}"
+
+if [[ "${MERGED_VIEW_CSV}" = /* ]]; then
+        MERGED_CSV_PATH="${MERGED_VIEW_CSV}"
+else
+        MERGED_CSV_PATH="${DATA_PATH%/}/${MERGED_VIEW_CSV}"
+fi
+
+if [ "${CREATE_MERGED_CSV}" != "0" ] && [ ! -f "${MERGED_CSV_PATH}" ]; then
+        python "${PROJECT_DIR}/tools/merge_val_test_csv.py" \
+                --data-path "${DATA_PATH}" \
+                --val-csv "${VAL_VIEW_CSV}" \
+                --test-csv "${TEST_VIEW_CSV}" \
+                --output-csv "${MERGED_VIEW_CSV}" \
+                --delimiter ','
+fi
+
+# 评估复用 clean 入口，val/test CSV 均指向合并后的 held-out view3。
 python "${PROJECT_DIR}/run_class_finetuning_et_clean.py" \
         --eval \
         --eval_split "${EVAL_SPLIT}" \
@@ -37,8 +53,8 @@ python "${PROJECT_DIR}/run_class_finetuning_et_clean.py" \
         --prefix "${PREFIX}" \
         --train_view1_csv 'aligned_v01_1.csv' \
         --train_view2_csv 'aligned_v02_2.csv' \
-        --val_view_csv "${VAL_VIEW_CSV}" \
-        --test_view_csv "${TEST_VIEW_CSV}" \
+        --val_view_csv "${MERGED_VIEW_CSV}" \
+        --test_view_csv "${MERGED_VIEW_CSV}" \
         --csv_delimiter ',' \
         --nb_classes 12 \
         --output_dir "${OUTPUT_DIR}" \

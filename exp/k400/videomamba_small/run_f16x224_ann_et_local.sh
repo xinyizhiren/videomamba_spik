@@ -16,8 +16,8 @@ OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_DIR}/outputs/${JOB_NAME}}"
 LOG_DIR="${LOG_DIR:-${PROJECT_DIR}/logs/${JOB_NAME}}"
 
 # DATA_PATH 放 CSV 标注文件，PREFIX 是 CSV 中相对视频路径的根目录。
-PREFIX="${PREFIX:-/data_hdd/oyys/VIT_4090/dataset/data/multiview_action_videos/}"
-DATA_PATH="${DATA_PATH:-/data_hdd/oyys/VIT_4090/dataset/data/multiview_action_videos/}"
+PREFIX="${PREFIX:-/data/users/ouyangys/data/multiview_action_videos/}"
+DATA_PATH="${DATA_PATH:-/data/users/ouyangys/data/multiview_action_videos/}"
 # MODEL_PATH 是 K400 预训练权重；RESUME_PATH 显式指定时才从旧 checkpoint 续训。
 MODEL_PATH="${MODEL_PATH:-${PROJECT_DIR}/videomamba_s16_k400_f16_res224.pth}"
 RESUME_PATH="${RESUME_PATH:-}"
