@@ -1,0 +1,53 @@
+VideoMamba clean forward high-level order
+=========================================
+
+1. patch_embed
+2. add spatial pos_embed to patch tokens
+3. build cls_token
+4. reshape tokens for temporal order
+5. add temporal_pos_embedding
+6. reshape back to video token sequence
+7. concat cls_token + video tokens
+8. pos_drop
+9. layers.0
+10. layers.1
+11. layers.2
+12. layers.3
+13. layers.4
+14. layers.5
+15. layers.6
+16. layers.7
+17. layers.8
+18. layers.9
+19. layers.10
+20. layers.11
+21. layers.12
+22. layers.13
+23. layers.14
+24. layers.15
+25. layers.16
+26. layers.17
+27. layers.18
+28. layers.19
+29. layers.20
+30. layers.21
+31. layers.22
+32. layers.23
+33. norm_f
+34. mean_pool or cls_token_select
+35. head_drop
+36. head
+
+ANN-to-SNN insertion points used by the converter
+=================================================
+
+A. patch_embed output -> patch_spike
+B. layers.0 output -> block_spikes["0"]
+C. layers.1 output -> block_spikes["1"]
+
+These are the default conversion points.
+For exact leaf-module execution order and tensor shapes, run:
+
+python ann2snn/dump_videomamba_layer_order.py \
+  --checkpoint ./outputs/videomamba_small_cv_train12_test3_ann_clean_full/best.pth \
+  --output ./outputs/ann2snn_videomamba/videomamba_layer_order.txt

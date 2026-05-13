@@ -326,11 +326,23 @@ def main(args, ds_init):
         data_loader_test = None
 
     if 'spikmamba' in args.model:
-        model = create_model(
-            args.model,
+        model_kwargs = dict(
             pretrained=False if args.finetune else True,
             num_classes=args.nb_classes,
-            batch_size = args.batch_size,
+            batch_size=args.batch_size,
+        )
+        if args.model == 'spikmamba_fixed':
+            model_kwargs.update(
+                img_size_h=args.input_size,
+                img_size_w=args.input_size,
+                num_frames=args.num_frames,
+                drop_path_rate=args.drop_path,
+                kernel_size=args.tubelet_size,
+                bimamba=True,
+            )
+        model = create_model(
+            args.model,
+            **model_kwargs,
         )
     else:
         # 非 spikmamba 模型时，主动抛出 ValueError 并明确提示

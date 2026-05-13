@@ -24,6 +24,9 @@ from .videomamba import (
 from .videomamba_spik_baseline_1 import (
     spikmamba,
 )
+from .videomamba_spik_baseline_1_fixed import (
+    spikmamba_fixed,
+)
 
 from .videomamba_pretrain import (
     videomamba_middle_pretrain
