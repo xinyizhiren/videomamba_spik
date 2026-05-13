@@ -1,30 +1,18 @@
-from .clip import clip_b16, clip_l14, clip_l14_336
-from .modeling_finetune import (
-    vit_base_patch16_224, 
-    vit_base_patch16_384, 
-    vit_large_patch16_224, 
-    vit_large_patch16_384
-)
-from .modeling_pretrain_umt import (
-    pretrain_umt_base_patch16_224, 
-    pretrain_umt_large_patch16_224 
-)
-from .modeling_pretrain import (
-    pretrain_videomae_base_patch16_224, 
-    pretrain_videomae_large_patch16_224, 
-    pretrain_videomae_huge_patch16_224 
-)
-from .deit import deit_tiny_patch16_224
-from .videomamba import (
-    videomamba_tiny, 
-    videomamba_small, 
-    videomamba_middle, 
-)
+"""Model entry points retained for clean ANN and optional SNN experiments."""
 
-from .videomamba_spik_baseline_1 import (
-    spikmamba,
-)
+from .videomamba_clean import CleanVideoMamba, create_videomamba_small_clean
 
-from .videomamba_pretrain import (
-    videomamba_middle_pretrain
-)
+__all__ = [
+    "CleanVideoMamba",
+    "SpikMambaFixed",
+    "create_videomamba_small_clean",
+    "spikmamba_fixed",
+]
+
+
+def __getattr__(name):
+    if name in {"SpikMambaFixed", "spikmamba_fixed"}:
+        from .videomamba_spik_baseline_1_fixed import SpikMambaFixed, spikmamba_fixed
+
+        return {"SpikMambaFixed": SpikMambaFixed, "spikmamba_fixed": spikmamba_fixed}[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

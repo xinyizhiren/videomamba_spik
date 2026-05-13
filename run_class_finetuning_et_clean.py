@@ -15,11 +15,30 @@ from datasets.multiview_action_clean import CrossViewTrainDataset, SingleViewDat
 from models.videomamba_clean import create_videomamba_small_clean
 
 
+MODEL_ALIASES = {
+    "videomamba_small": "videomamba_small_clean",
+    "videomamba_small_clean": "videomamba_small_clean",
+    "spikmamba": "spikmamba_fixed",
+    "spikmamba_fixed": "spikmamba_fixed",
+}
+
+
 def get_args():
     parser = argparse.ArgumentParser("Clean VideoMamba ET fine-tuning")
+    parser.add_argument(
+        "--model",
+        default="videomamba_small_clean",
+        help="Model to train: videomamba_small_clean/videomamba_small or spikmamba_fixed/spikmamba.",
+    )
     parser.add_argument("--finetune", default="")
     parser.add_argument("--resume", default="")
     parser.add_argument("--model_key", default="model|module")
+    parser.add_argument(
+        "--min_pretrained_load_ratio",
+        default=0.05,
+        type=float,
+        help="Skip --finetune loading when matched tensor ratio is below this value.",
+    )
 
     parser.add_argument("--data_path", required=True)
     parser.add_argument("--prefix", default="")
@@ -65,6 +84,11 @@ def get_args():
     parser.add_argument("--fc_drop_rate", default=0.0, type=float)
     parser.add_argument("--use_mean_pooling", action="store_true", default=True)
     parser.add_argument("--use_cls", action="store_false", dest="use_mean_pooling")
+    parser.add_argument("--spik_patch_size", default=14, type=int)
+    parser.add_argument("--spik_embed_dims", default=384, type=int)
+    parser.add_argument("--spik_time_steps", default=1, type=int)
+    parser.add_argument("--spik_bimamba", action="store_true", default=True)
+    parser.add_argument("--no_spik_bimamba", action="store_false", dest="spik_bimamba")
 
     parser.add_argument("--train_crop_min_scale", default=0.5, type=float)
     parser.add_argument("--train_crop_max_scale", default=1.0, type=float)
@@ -167,6 +191,49 @@ def make_dataset(args, mode):
         raise ValueError(f"Unsupported mode for clean training: {mode}")
 
 
+def normalize_model_name(model_name):
+    normalized = MODEL_ALIASES.get(model_name)
+    if normalized is None:
+        supported = ", ".join(sorted(MODEL_ALIASES))
+        raise ValueError(f"Unsupported --model '{model_name}'. Supported values: {supported}")
+    return normalized
+
+
+def build_model(args):
+    model_name = normalize_model_name(args.model)
+    args.model = model_name
+    if model_name == "videomamba_small_clean":
+        return create_videomamba_small_clean(
+            img_size=args.input_size,
+            num_classes=args.nb_classes,
+            num_frames=args.num_frames,
+            tubelet_size=args.tubelet_size,
+            fc_drop_rate=args.fc_drop_rate,
+            drop_path=args.drop_path,
+            use_mean_pooling=args.use_mean_pooling,
+        )
+
+    if model_name == "spikmamba_fixed":
+        from models.videomamba_spik_baseline_1_fixed import spikmamba_fixed
+
+        return spikmamba_fixed(
+            pretrained=False,
+            img_size_h=args.input_size,
+            img_size_w=args.input_size,
+            patch_size=args.spik_patch_size,
+            embed_dims=args.spik_embed_dims,
+            num_classes=args.nb_classes,
+            batch_size=args.batch_size,
+            num_frames=args.num_frames,
+            kernel_size=args.tubelet_size,
+            drop_path_rate=args.drop_path,
+            T=args.spik_time_steps,
+            bimamba=args.spik_bimamba,
+        )
+
+    raise AssertionError(f"Unhandled normalized model: {model_name}")
+
+
 def extract_checkpoint_state(checkpoint, model_key):
     for key in model_key.split("|"):
         if isinstance(checkpoint, dict) and key in checkpoint:
@@ -208,7 +275,7 @@ def print_checkpoint_structure(checkpoint, state, model_state):
         f"{len(model_tensor_keys)} total, {len(model_reverse_keys)} BiMamba reverse-branch tensors")
 
 
-def load_pretrained(model, path, model_key):
+def load_pretrained(model, path, model_key, min_load_ratio=0.05):
     if not path:
         return
     checkpoint = torch.load(path, map_location="cpu")
@@ -224,6 +291,14 @@ def load_pretrained(model, path, model_key):
             loadable[key] = value
         else:
             skipped.append(key)
+
+    load_ratio = len(loadable) / max(1, len(model_state))
+    if load_ratio < min_load_ratio:
+        print(
+            f"Skipped pretrained checkpoint: only {len(loadable)}/{len(model_state)} "
+            f"model tensors matched ({load_ratio:.2%}), below min_pretrained_load_ratio={min_load_ratio:.2%}.")
+        print("Set --min_pretrained_load_ratio 0 to force this partial load.")
+        return
 
     msg = model.load_state_dict(loadable, strict=False)
     print(f"Loaded pretrained checkpoint: {path}")
@@ -333,6 +408,13 @@ def move_train_batch(batch, device):
     )
 
 
+def forward_train_logits(model, view1, view2):
+    model_outputs = model(view1, view2, return_view_logits=True)
+    if not isinstance(model_outputs, (tuple, list)) or len(model_outputs) < 3:
+        raise RuntimeError("Model must return fused, view1, and view2 logits when return_view_logits=True.")
+    return model_outputs[:3]
+
+
 def train_one_epoch(model, loader, criterion, optimizer, scaler, device, epoch, args):
     model.train()
     optimizer.zero_grad(set_to_none=True)
@@ -357,9 +439,7 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler, device, epoch, 
     for step, batch in enumerate(loader):
         view1, view2, target = move_train_batch(batch, device)
         with amp_context(device, args):
-            model_outputs = model(view1, view2, return_view_logits=True)
-            _, view1_logits, view2_logits = model_outputs[:3]
-            fused_logits = 0.5 * (view1_logits + view2_logits)
+            fused_logits, view1_logits, view2_logits = forward_train_logits(model, view1, view2)
             fused_ce = criterion(fused_logits, target)
             view_ce = 0.5 * (criterion(view1_logits, target) + criterion(view2_logits, target))
             loss = args.fused_ce_loss_weight * fused_ce + args.view_ce_loss_weight * view_ce
@@ -504,18 +584,11 @@ def main():
         worker_init_fn=seed_worker,
     )
 
-    model = create_videomamba_small_clean(
-        img_size=args.input_size,
-        num_classes=args.nb_classes,
-        num_frames=args.num_frames,
-        tubelet_size=args.tubelet_size,
-        fc_drop_rate=args.fc_drop_rate,
-        drop_path=args.drop_path,
-        use_mean_pooling=args.use_mean_pooling,
-    )
+    model = build_model(args)
+    print(f"Built model: {args.model} ({model.__class__.__name__})")
     eval_checkpoint = args.eval_checkpoint or args.resume
     if not (args.eval and eval_checkpoint):
-        load_pretrained(model, args.finetune, args.model_key)
+        load_pretrained(model, args.finetune, args.model_key, args.min_pretrained_load_ratio)
     model.to(device)
 
     criterion = torch.nn.CrossEntropyLoss()

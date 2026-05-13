@@ -1,0 +1,14 @@
+# Install the PyTorch build that matches the server CUDA version first when needed.
+torch
+numpy
+decord
+einops
+timm
+tqdm
+
+# Required by VideoMamba/Mamba kernels in normal training environments.
+mamba-ssm
+causal-conv1d
+
+# Required only when MODEL_NAME=spikmamba_fixed or ANN-to-SNN tools are used.
+spikingjelly

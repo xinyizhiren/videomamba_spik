@@ -4,7 +4,7 @@ export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS=1
 export PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True'
 # 默认使用第 1 张 GPU；临时换卡可在命令前覆盖 CUDA_VISIBLE_DEVICES。
-export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1}"
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-3}"
 
 # 正式 clean 训练实验名，同时决定默认输出目录名。
 JOB_NAME='videomamba_small_cv_train12_test3_ann_clean_full'
@@ -20,9 +20,15 @@ DATA_PATH="${DATA_PATH:-/data/users/ouyangys/data/multiview_action_videos/}"
 # MODEL_PATH 是 K400 预训练权重；RESUME_PATH 是继续上一次 clean 训练的断点。
 MODEL_PATH="${MODEL_PATH:-${PROJECT_DIR}/videomamba_s16_k400_f16_res224.pth}"
 RESUME_PATH="${RESUME_PATH:-}"
+MODEL_NAME="${MODEL_NAME:-videomamba_small}"
+NUM_FRAMES="${NUM_FRAMES:-16}"
+# SpikMamba repeats video frames by this factor internally. Keep it low to avoid OOM.
+SPIK_TIME_STEPS="${SPIK_TIME_STEPS:-1}"
+SPIK_PATCH_SIZE="${SPIK_PATCH_SIZE:-14}"
+SPIK_EMBED_DIMS="${SPIK_EMBED_DIMS:-384}"
 
 # BATCH_SIZE 是单次 optimizer step 前每个 mini-batch 的样本数；UPDATE_FREQ 用于梯度累积。
-BATCH_SIZE="${BATCH_SIZE:-6}"
+BATCH_SIZE="${BATCH_SIZE:-8}"
 EPOCHS="${EPOCHS:-40}"
 # clean 入口中 LR 就是实际 AdamW 学习率，不再按 batch size 做线性缩放。
 LR="${LR:-1e-4}"
@@ -64,6 +70,7 @@ fi
 
 # 训练用 view1+view2，验证默认使用未参与训练的 view3。
 python "${PROJECT_DIR}/run_class_finetuning_et_clean.py" \
+        --model "${MODEL_NAME}" \
         --finetune "${MODEL_PATH}" \
         --data_path "${DATA_PATH}" \
         --prefix "${PREFIX}" \
@@ -74,11 +81,14 @@ python "${PROJECT_DIR}/run_class_finetuning_et_clean.py" \
         --nb_classes 12 \
         --output_dir "${OUTPUT_DIR}" \
         --batch_size "${BATCH_SIZE}" \
-        --num_frames 16 \
+        --num_frames "${NUM_FRAMES}" \
         --sampling_rate 4 \
         --input_size 224 \
         --short_side_size 224 \
         --tubelet_size 1 \
+        --spik_time_steps "${SPIK_TIME_STEPS}" \
+        --spik_patch_size "${SPIK_PATCH_SIZE}" \
+        --spik_embed_dims "${SPIK_EMBED_DIMS}" \
         --num_workers 4 \
         --epochs "${EPOCHS}" \
         --lr "${LR}" \

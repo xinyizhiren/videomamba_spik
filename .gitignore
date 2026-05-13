@@ -11,17 +11,29 @@ env/
 .vscode/
 .idea/
 
-# Training artifacts
+# Local data and training artifacts
+data/
+local_data/
 outputs/
+outputs_server/
+checkpoints/
 logs/
 runs/
 wandb/
 tensorboard/
 
-# Model checkpoints and weights
+# Model checkpoints, weights, and generated arrays
 *.pth
 *.pt
 *.ckpt
+*.npy
+*.npz
+*.h5
+*.hdf5
+
+# Logs and scheduler output
+*.log
+*.out
 
 # OS noise
 .DS_Store
