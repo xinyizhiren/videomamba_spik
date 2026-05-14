@@ -14,6 +14,7 @@ SpikMamba model and ANN-to-SNN conversion utilities kept for follow-up experimen
 │   └── multiview_action_clean.py             # CSV video loader and transforms
 ├── exp/
 │   ├── run_f16x224_ann_et_clean.sh           # main clean training entry
+│   ├── run_f16x224_ann_et_clean_scratch.sh   # train from random initialization
 │   ├── run_f16x224_ann_et_clean_test.sh      # eval-only entry
 │   ├── run_f16x224_ann_et_clean_valtest.sh   # optional val+test validation run
 │   └── run_f16x224_ann_et_clean_valtest_test.sh
@@ -51,6 +52,20 @@ greater than 1:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1 NPROC_PER_NODE=2 bash exp/run_f16x224_ann_et_clean.sh
+```
+
+Train from scratch without loading K400 weights:
+
+```bash
+bash exp/run_f16x224_ann_et_clean_scratch.sh
+```
+
+The scratch launcher uses a separate output directory and defaults to longer training
+(`EPOCHS=120`, `WARMUP_EPOCHS=10`, `LR=3e-4`, `DROP_PATH=0.05`). Override any value the
+same way as the main launcher, for example:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1 NPROC_PER_NODE=2 LR=1e-4 bash exp/run_f16x224_ann_et_clean_scratch.sh
 ```
 
 Outputs are written under `outputs/` by default. Checkpoints and generated artifacts are
