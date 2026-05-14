@@ -1,7 +1,7 @@
 # VideoMamba Clean Cross-View Training
 
 This repository is trimmed for one active workflow: clean cross-view ANN fine-tuning from
-`exp/k400/videomamba_small/run_f16x224_ann_et_clean.sh`, with the optional fixed
+`exp/run_f16x224_ann_et_clean.sh`, with the optional fixed
 SpikMamba model and ANN-to-SNN conversion utilities kept for follow-up experiments.
 
 ## Repository Layout
@@ -12,7 +12,7 @@ SpikMamba model and ANN-to-SNN conversion utilities kept for follow-up experimen
 ├── datasets/
 │   ├── __init__.py
 │   └── multiview_action_clean.py             # CSV video loader and transforms
-├── exp/k400/videomamba_small/
+├── exp/
 │   ├── run_f16x224_ann_et_clean.sh           # main clean training entry
 │   ├── run_f16x224_ann_et_clean_test.sh      # eval-only entry
 │   ├── run_f16x224_ann_et_clean_valtest.sh   # optional val+test validation run
@@ -43,40 +43,57 @@ Put CSV annotation files and videos outside Git, then point the script to those 
 DATA_PATH=/data/users/ouyangys/data/multiview_action_videos \
 PREFIX=/data/users/ouyangys/data/multiview_action_videos \
 MODEL_PATH=/path/to/videomamba_s16_k400_f16_res224.pth \
-bash exp/k400/videomamba_small/run_f16x224_ann_et_clean.sh
+bash exp/run_f16x224_ann_et_clean.sh
 ```
 
-Outputs are written under `outputs/` by default and are ignored by Git. The default
-pretrained checkpoint name in the script is `videomamba_s16_k400_f16_res224.pth`; keep
-that file local or on the server, not in the repository.
+Single-node multi-GPU training uses `torchrun` automatically when `NPROC_PER_NODE` is
+greater than 1:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1 NPROC_PER_NODE=2 bash exp/run_f16x224_ann_et_clean.sh
+```
+
+Outputs are written under `outputs/` by default. Checkpoints and generated artifacts are
+ignored by Git, while `log.txt`, `*_log.txt`, and `.log` files under `outputs/` are
+trackable. The default pretrained checkpoint name in the script is
+`videomamba_s16_k400_f16_res224.pth`; keep that file local or on the server, not in the
+repository.
 
 Evaluation uses the same Python entry in `--eval` mode:
 
 ```bash
 CHECKPOINT_PATH=outputs/videomamba_small_cv_train12_test3_ann_clean_full/best.pth \
-bash exp/k400/videomamba_small/run_f16x224_ann_et_clean_test.sh
+bash exp/run_f16x224_ann_et_clean_test.sh
 ```
 
 To instantiate the retained pulse model through the clean entry, set:
 
 ```bash
-MODEL_NAME=spikmamba_fixed bash exp/k400/videomamba_small/run_f16x224_ann_et_clean.sh
+MODEL_NAME=spikmamba_fixed bash exp/run_f16x224_ann_et_clean.sh
 ```
 
 ## Collaboration Workflow
 
-Use Git for source code, scripts, and docs only. Do not add data, pretrained weights,
-checkpoints, logs, `outputs/`, `runs/`, or `wandb/`.
+Use Git for source code, scripts, docs, and training logs. Do not add data, pretrained
+weights, checkpoints, tensorboard events, `runs/`, or `wandb/`.
 
 Typical local flow:
 
 ```bash
 git status
-bash exp/k400/videomamba_small/run_f16x224_ann_et_clean.sh
+bash exp/run_f16x224_ann_et_clean.sh
 git diff
-git add .
+git add -A :/
+git status --short
+git diff --cached --name-status
 git commit -m "describe the training change"
 git push origin main
+```
+
+Before committing from the server, this quick check should print nothing:
+
+```bash
+git diff --cached --name-only | grep -E '\.(pth|pt|ckpt|npy|npz|h5|hdf5)$' || true
 ```
 
 Server flow:

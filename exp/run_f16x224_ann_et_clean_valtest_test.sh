@@ -3,11 +3,16 @@
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS=1
 export PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True'
-# 默认使用第 1 张 GPU；临时换卡可在命令前覆盖 CUDA_VISIBLE_DEVICES。
+# 单卡默认使用第 1 张 GPU；多卡评估时用 CUDA_VISIBLE_DEVICES=0,1 NPROC_PER_NODE=2 覆盖。
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1}"
+NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
+NNODES="${NNODES:-1}"
+NODE_RANK="${NODE_RANK:-0}"
+MASTER_ADDR="${MASTER_ADDR:-127.0.0.1}"
+MASTER_PORT="${MASTER_PORT:-29503}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # 对应 run_f16x224_ann_et_clean_valtest.sh 的输出目录。
 TRAIN_OUTPUT_DIR="${TRAIN_OUTPUT_DIR:-${PROJECT_DIR}/outputs/videomamba_small_cv_train12_valtest_ann_clean_full}"
@@ -43,8 +48,20 @@ if [ "${CREATE_MERGED_CSV}" != "0" ] && [ ! -f "${MERGED_CSV_PATH}" ]; then
                 --delimiter ','
 fi
 
+RUN_CMD=(python)
+if [ "${NPROC_PER_NODE}" -gt 1 ] || [ "${NNODES}" -gt 1 ]; then
+        RUN_CMD=(
+                torchrun
+                --nnodes "${NNODES}"
+                --nproc_per_node "${NPROC_PER_NODE}"
+                --node_rank "${NODE_RANK}"
+                --master_addr "${MASTER_ADDR}"
+                --master_port "${MASTER_PORT}"
+        )
+fi
+
 # 评估复用 clean 入口，val/test CSV 均指向合并后的 held-out view3。
-python "${PROJECT_DIR}/run_class_finetuning_et_clean.py" \
+"${RUN_CMD[@]}" "${PROJECT_DIR}/run_class_finetuning_et_clean.py" \
         --eval \
         --eval_split "${EVAL_SPLIT}" \
         --eval_checkpoint "${CHECKPOINT_PATH}" \

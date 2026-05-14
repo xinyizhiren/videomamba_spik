@@ -3,14 +3,19 @@
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS=1
 export PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True'
-# 默认使用第 1 张 GPU；临时换卡可在命令前覆盖 CUDA_VISIBLE_DEVICES。
+# 单卡默认使用第 3 张 GPU；多卡时用 CUDA_VISIBLE_DEVICES=0,1 NPROC_PER_NODE=2 覆盖。
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-3}"
+NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
+NNODES="${NNODES:-1}"
+NODE_RANK="${NODE_RANK:-0}"
+MASTER_ADDR="${MASTER_ADDR:-127.0.0.1}"
+MASTER_PORT="${MASTER_PORT:-29500}"
 
 # 正式 clean 训练实验名，同时决定默认输出目录名。
 JOB_NAME='videomamba_small_cv_train12_test3_ann_clean_full'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # 训练日志和 checkpoint 输出目录；可用 OUTPUT_DIR=... 覆盖。
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_DIR}/outputs/${JOB_NAME}}"
 
@@ -68,8 +73,20 @@ if [ "${DEBUG_OVERFIT_SAMPLES}" != "0" ]; then
         OVERFIT_ARGS=(--debug_overfit_samples "${DEBUG_OVERFIT_SAMPLES}")
 fi
 
+RUN_CMD=(python)
+if [ "${NPROC_PER_NODE}" -gt 1 ] || [ "${NNODES}" -gt 1 ]; then
+        RUN_CMD=(
+                torchrun
+                --nnodes "${NNODES}"
+                --nproc_per_node "${NPROC_PER_NODE}"
+                --node_rank "${NODE_RANK}"
+                --master_addr "${MASTER_ADDR}"
+                --master_port "${MASTER_PORT}"
+        )
+fi
+
 # 训练用 view1+view2，验证默认使用未参与训练的 view3。
-python "${PROJECT_DIR}/run_class_finetuning_et_clean.py" \
+"${RUN_CMD[@]}" "${PROJECT_DIR}/run_class_finetuning_et_clean.py" \
         --model "${MODEL_NAME}" \
         --finetune "${MODEL_PATH}" \
         --data_path "${DATA_PATH}" \

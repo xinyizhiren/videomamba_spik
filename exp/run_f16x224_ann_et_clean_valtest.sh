@@ -3,14 +3,19 @@
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS=1
 export PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True'
-# 默认使用第 1 张 GPU；临时换卡可在命令前覆盖 CUDA_VISIBLE_DEVICES。
+# 单卡默认使用第 1 张 GPU；多卡时用 CUDA_VISIBLE_DEVICES=0,1 NPROC_PER_NODE=2 覆盖。
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1}"
+NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
+NNODES="${NNODES:-1}"
+NODE_RANK="${NODE_RANK:-0}"
+MASTER_ADDR="${MASTER_ADDR:-127.0.0.1}"
+MASTER_PORT="${MASTER_PORT:-29502}"
 
 # 这是新增的 val+test 合并验证链路，不替代原 clean 训练脚本。
 JOB_NAME='videomamba_small_cv_train12_valtest_ann_clean_full'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_DIR}/outputs/${JOB_NAME}}"
 
 # 新服务器默认数据目录；DATA_PATH 放 CSV，PREFIX 是 CSV 中相对视频路径的根目录。
@@ -76,8 +81,20 @@ if [ "${DEBUG_OVERFIT_SAMPLES}" != "0" ]; then
         OVERFIT_ARGS=(--debug_overfit_samples "${DEBUG_OVERFIT_SAMPLES}")
 fi
 
+RUN_CMD=(python)
+if [ "${NPROC_PER_NODE}" -gt 1 ] || [ "${NNODES}" -gt 1 ]; then
+        RUN_CMD=(
+                torchrun
+                --nnodes "${NNODES}"
+                --nproc_per_node "${NPROC_PER_NODE}"
+                --node_rank "${NODE_RANK}"
+                --master_addr "${MASTER_ADDR}"
+                --master_port "${MASTER_PORT}"
+        )
+fi
+
 # 训练仍使用 view1+view2；validation 改为 view3 的 val+test 合并集。
-python "${PROJECT_DIR}/run_class_finetuning_et_clean.py" \
+"${RUN_CMD[@]}" "${PROJECT_DIR}/run_class_finetuning_et_clean.py" \
         --finetune "${MODEL_PATH}" \
         --data_path "${DATA_PATH}" \
         --prefix "${PREFIX}" \

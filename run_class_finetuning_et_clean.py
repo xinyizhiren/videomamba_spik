@@ -10,6 +10,8 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel
 
 from datasets.multiview_action_clean import CrossViewTrainDataset, SingleViewDataset, VideoTransform
 from models.videomamba_clean import create_videomamba_small_clean
@@ -21,6 +23,66 @@ MODEL_ALIASES = {
     "spikmamba": "spikmamba_fixed",
     "spikmamba_fixed": "spikmamba_fixed",
 }
+
+
+def init_distributed_mode(args):
+    args.rank = 0
+    args.world_size = 1
+    args.local_rank = 0
+    args.distributed = False
+
+    if "RANK" not in os.environ or "WORLD_SIZE" not in os.environ:
+        return
+
+    args.rank = int(os.environ["RANK"])
+    args.world_size = int(os.environ["WORLD_SIZE"])
+    args.local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    args.distributed = args.world_size > 1
+    if not args.distributed:
+        return
+
+    backend = "nccl" if torch.cuda.is_available() else "gloo"
+    if torch.cuda.is_available():
+        torch.cuda.set_device(args.local_rank)
+    dist.init_process_group(backend=backend, init_method="env://")
+    dist.barrier()
+
+
+def cleanup_distributed():
+    if dist.is_available() and dist.is_initialized():
+        dist.destroy_process_group()
+
+
+def is_main_process():
+    return not (dist.is_available() and dist.is_initialized()) or dist.get_rank() == 0
+
+
+def main_print(*values, **kwargs):
+    if is_main_process():
+        print(*values, **kwargs)
+
+
+def unwrap_model(model):
+    return model.module if hasattr(model, "module") else model
+
+
+class DistributedEvalSampler(torch.utils.data.Sampler):
+    def __init__(self, dataset, num_replicas=None, rank=None):
+        if num_replicas is None:
+            num_replicas = dist.get_world_size()
+        if rank is None:
+            rank = dist.get_rank()
+        self.dataset = dataset
+        self.num_replicas = num_replicas
+        self.rank = rank
+
+    def __iter__(self):
+        return iter(range(self.rank, len(self.dataset), self.num_replicas))
+
+    def __len__(self):
+        if len(self.dataset) <= self.rank:
+            return 0
+        return (len(self.dataset) - 1 - self.rank) // self.num_replicas + 1
 
 
 def get_args():
@@ -262,15 +324,15 @@ def is_bimamba_reverse_key(key):
 def print_checkpoint_structure(checkpoint, state, model_state):
     if isinstance(checkpoint, dict):
         top_keys = list(checkpoint.keys())
-        print(f"Checkpoint top-level keys ({len(top_keys)}): {top_keys[:12]}")
+        main_print(f"Checkpoint top-level keys ({len(top_keys)}): {top_keys[:12]}")
     ckpt_tensor_keys = [key for key, value in state.items() if torch.is_tensor(value)]
     model_tensor_keys = [key for key, value in model_state.items() if torch.is_tensor(value)]
     ckpt_reverse_keys = [key for key in ckpt_tensor_keys if is_bimamba_reverse_key(key)]
     model_reverse_keys = [key for key in model_tensor_keys if is_bimamba_reverse_key(key)]
-    print(
+    main_print(
         "Checkpoint tensors: "
         f"{len(ckpt_tensor_keys)} total, {len(ckpt_reverse_keys)} BiMamba reverse-branch tensors")
-    print(
+    main_print(
         "Model tensors: "
         f"{len(model_tensor_keys)} total, {len(model_reverse_keys)} BiMamba reverse-branch tensors")
 
@@ -294,26 +356,28 @@ def load_pretrained(model, path, model_key, min_load_ratio=0.05):
 
     load_ratio = len(loadable) / max(1, len(model_state))
     if load_ratio < min_load_ratio:
-        print(
+        main_print(
             f"Skipped pretrained checkpoint: only {len(loadable)}/{len(model_state)} "
             f"model tensors matched ({load_ratio:.2%}), below min_pretrained_load_ratio={min_load_ratio:.2%}.")
-        print("Set --min_pretrained_load_ratio 0 to force this partial load.")
+        main_print("Set --min_pretrained_load_ratio 0 to force this partial load.")
         return
 
     msg = model.load_state_dict(loadable, strict=False)
-    print(f"Loaded pretrained checkpoint: {path}")
-    print(f"Checkpoint key: {used_key}; loaded={len(loadable)} skipped={len(skipped)}")
-    print(f"Missing keys: {len(msg.missing_keys)}; unexpected keys: {len(msg.unexpected_keys)}")
+    main_print(f"Loaded pretrained checkpoint: {path}")
+    main_print(f"Checkpoint key: {used_key}; loaded={len(loadable)} skipped={len(skipped)}")
+    main_print(f"Missing keys: {len(msg.missing_keys)}; unexpected keys: {len(msg.unexpected_keys)}")
     if skipped[:8]:
-        print(f"First skipped keys: {skipped[:8]}")
+        main_print(f"First skipped keys: {skipped[:8]}")
 
 
 def save_checkpoint(args, model, optimizer, scheduler, epoch, best_acc1, name):
+    if not is_main_process():
+        return
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     path = Path(args.output_dir) / f"{name}.pth"
     torch.save(
         {
-            "model": model.state_dict(),
+            "model": unwrap_model(model).state_dict(),
             "optimizer": optimizer.state_dict(),
             "scheduler": scheduler.state_dict() if scheduler is not None else None,
             "epoch": epoch,
@@ -329,14 +393,14 @@ def load_resume(model, optimizer, scheduler, path, device):
         return 0, 0.0
     checkpoint = torch.load(path, map_location=device)
     state = checkpoint.get("model", checkpoint)
-    model.load_state_dict(state, strict=False)
+    unwrap_model(model).load_state_dict(state, strict=False)
     if "optimizer" in checkpoint and checkpoint["optimizer"] is not None:
         optimizer.load_state_dict(checkpoint["optimizer"])
     if scheduler is not None and checkpoint.get("scheduler") is not None:
         scheduler.load_state_dict(checkpoint["scheduler"])
     start_epoch = int(checkpoint.get("epoch", -1)) + 1
     best_acc1 = float(checkpoint.get("best_acc1", 0.0))
-    print(f"Resumed from {path}; start_epoch={start_epoch}; best_acc1={best_acc1:.2f}")
+    main_print(f"Resumed from {path}; start_epoch={start_epoch}; best_acc1={best_acc1:.2f}")
     return start_epoch, best_acc1
 
 
@@ -345,14 +409,14 @@ def load_eval_checkpoint(model, path, device):
         raise ValueError("--eval requires --eval_checkpoint or --resume")
     checkpoint = torch.load(path, map_location=device)
     state = checkpoint.get("model", checkpoint)
-    msg = model.load_state_dict(state, strict=False)
+    msg = unwrap_model(model).load_state_dict(state, strict=False)
     epoch = checkpoint.get("epoch", "unknown") if isinstance(checkpoint, dict) else "unknown"
     best_acc1 = checkpoint.get("best_acc1", None) if isinstance(checkpoint, dict) else None
-    print(f"Loaded eval checkpoint: {path}")
-    print(f"Eval checkpoint epoch: {epoch}")
+    main_print(f"Loaded eval checkpoint: {path}")
+    main_print(f"Eval checkpoint epoch: {epoch}")
     if best_acc1 is not None:
-        print(f"Eval checkpoint best_acc1: {float(best_acc1):.2f}")
-    print(f"Eval missing keys: {len(msg.missing_keys)}; unexpected keys: {len(msg.unexpected_keys)}")
+        main_print(f"Eval checkpoint best_acc1: {float(best_acc1):.2f}")
+    main_print(f"Eval missing keys: {len(msg.missing_keys)}; unexpected keys: {len(msg.unexpected_keys)}")
 
 
 def make_scheduler(optimizer, args):
@@ -415,6 +479,30 @@ def forward_train_logits(model, view1, view2):
     return model_outputs[:3]
 
 
+def reduce_metrics(totals, hists, device, prefix, elapsed=None):
+    total_keys = list(totals)
+    total_tensor = torch.tensor([float(totals[key]) for key in total_keys], dtype=torch.float64, device=device)
+    if dist.is_available() and dist.is_initialized():
+        dist.all_reduce(total_tensor, op=dist.ReduceOp.SUM)
+    reduced_totals = {key: total_tensor[index].item() for index, key in enumerate(total_keys)}
+
+    count = max(1.0, reduced_totals.pop("count"))
+    stats = {f"{prefix}_{key}": value / count for key, value in reduced_totals.items()}
+
+    if elapsed is not None:
+        elapsed_tensor = torch.tensor(float(elapsed), dtype=torch.float64, device=device)
+        if dist.is_available() and dist.is_initialized():
+            dist.all_reduce(elapsed_tensor, op=dist.ReduceOp.MAX)
+        stats[f"{prefix}_time"] = elapsed_tensor.item()
+
+    for key, hist in hists.items():
+        hist_tensor = hist.to(device=device)
+        if dist.is_available() and dist.is_initialized():
+            dist.all_reduce(hist_tensor, op=dist.ReduceOp.SUM)
+        stats[f"{prefix}_{key}"] = hist_list(hist_tensor.cpu())
+    return stats
+
+
 def train_one_epoch(model, loader, criterion, optimizer, scaler, device, epoch, args):
     model.train()
     optimizer.zero_grad(set_to_none=True)
@@ -438,6 +526,7 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler, device, epoch, 
     start = time.time()
     for step, batch in enumerate(loader):
         view1, view2, target = move_train_batch(batch, device)
+        sync_grad = (step + 1) % args.update_freq == 0 or (step + 1) == len(loader)
         with amp_context(device, args):
             fused_logits, view1_logits, view2_logits = forward_train_logits(model, view1, view2)
             fused_ce = criterion(fused_logits, target)
@@ -445,12 +534,18 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler, device, epoch, 
             loss = args.fused_ce_loss_weight * fused_ce + args.view_ce_loss_weight * view_ce
             loss_for_backward = loss / args.update_freq
 
-        if scaler.is_enabled():
-            scaler.scale(loss_for_backward).backward()
-        else:
-            loss_for_backward.backward()
+        backward_context = (
+            model.no_sync()
+            if args.distributed and hasattr(model, "no_sync") and not sync_grad
+            else contextlib.nullcontext()
+        )
+        with backward_context:
+            if scaler.is_enabled():
+                scaler.scale(loss_for_backward).backward()
+            else:
+                loss_for_backward.backward()
 
-        if (step + 1) % args.update_freq == 0 or (step + 1) == len(loader):
+        if sync_grad:
             if scaler.is_enabled():
                 if args.clip_grad is not None:
                     scaler.unscale_(optimizer)
@@ -481,18 +576,14 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler, device, epoch, 
         update_hist(hists["view1_pred_hist"], view1_logits.argmax(dim=1))
         update_hist(hists["view2_pred_hist"], view2_logits.argmax(dim=1))
 
-        if step % max(1, args.print_freq) == 0:
-            print(
+        if is_main_process() and step % max(1, args.print_freq) == 0:
+            main_print(
                 f"Epoch {epoch} [{step}/{len(loader)}] "
                 f"loss={loss.item():.4f} acc1={fused_acc1:.2f} "
                 f"view1={view1_acc1:.2f} view2={view2_acc1:.2f}"
             )
 
-    count = max(1, totals.pop("count"))
-    stats = {f"train_{key}": value / count for key, value in totals.items()}
-    stats["train_time"] = time.time() - start
-    stats.update({f"train_{key}": hist_list(value) for key, value in hists.items()})
-    return stats
+    return reduce_metrics(totals, hists, device, "train", elapsed=time.time() - start)
 
 
 @torch.no_grad()
@@ -518,30 +609,31 @@ def validate(model, loader, criterion, device, args):
         update_hist(hists["target_hist"], target)
         update_hist(hists["pred_hist"], logits.argmax(dim=1))
 
-    count = max(1, totals.pop("count"))
-    stats = {f"val_{key}": value / count for key, value in totals.items()}
-    stats.update({f"val_{key}": hist_list(value) for key, value in hists.items()})
-    return stats
+    return reduce_metrics(totals, hists, device, "val")
 
 
 def write_log(args, stats, filename="log.txt"):
+    if not is_main_process():
+        return
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     with open(Path(args.output_dir) / filename, "a", encoding="utf-8") as f:
         f.write(json.dumps(stats, ensure_ascii=False) + "\n")
 
 
-def main():
-    args = get_args()
+def run(args):
     if args.fused_ce_loss_weight <= 0 and args.view_ce_loss_weight <= 0:
         raise ValueError("At least one of fused_ce_loss_weight or view_ce_loss_weight must be > 0.")
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-    set_seed(args.seed)
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+    set_seed(args.seed + args.rank)
+    if args.distributed and torch.cuda.is_available():
+        device = torch.device("cuda", args.local_rank)
+    else:
+        device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     torch.backends.cudnn.benchmark = True
 
-    print("Clean ET training configuration:")
+    main_print("Clean ET training configuration:")
     for key in sorted(vars(args)):
-        print(f"  {key}: {getattr(args, key)}")
+        main_print(f"  {key}: {getattr(args, key)}")
 
     if args.eval:
         train_dataset = None
@@ -556,27 +648,39 @@ def main():
             for label in labels:
                 label_hist[label] = label_hist.get(label, 0) + 1
             train_dataset = torch.utils.data.Subset(train_dataset, indices)
-            print(f"Debug balanced subset: {len(indices)} samples; class histogram: {dict(label_hist)}")
+            main_print(f"Debug balanced subset: {len(indices)} samples; class histogram: {dict(label_hist)}")
         val_dataset = make_dataset(args, "validation")
     loader_generator = torch.Generator()
     loader_generator.manual_seed(args.seed)
+    train_sampler = None
+    if not args.eval and args.distributed:
+        train_sampler = torch.utils.data.distributed.DistributedSampler(
+            train_dataset,
+            num_replicas=args.world_size,
+            rank=args.rank,
+            shuffle=True,
+            drop_last=True,
+        )
+    val_sampler = DistributedEvalSampler(val_dataset) if args.distributed else None
 
     if not args.eval:
         train_loader = torch.utils.data.DataLoader(
             train_dataset,
             batch_size=args.batch_size,
-            shuffle=True,
+            shuffle=train_sampler is None,
+            sampler=train_sampler,
             num_workers=args.num_workers,
             pin_memory=args.pin_mem,
             drop_last=True,
             persistent_workers=args.num_workers > 0,
             worker_init_fn=seed_worker,
-            generator=loader_generator,
+            generator=loader_generator if train_sampler is None else None,
         )
     val_loader = torch.utils.data.DataLoader(
         val_dataset,
         batch_size=max(1, int(1.5 * args.batch_size)),
         shuffle=False,
+        sampler=val_sampler,
         num_workers=args.num_workers,
         pin_memory=args.pin_mem,
         drop_last=False,
@@ -585,11 +689,16 @@ def main():
     )
 
     model = build_model(args)
-    print(f"Built model: {args.model} ({model.__class__.__name__})")
+    main_print(f"Built model: {args.model} ({model.__class__.__name__})")
     eval_checkpoint = args.eval_checkpoint or args.resume
     if not (args.eval and eval_checkpoint):
         load_pretrained(model, args.finetune, args.model_key, args.min_pretrained_load_ratio)
     model.to(device)
+    if args.distributed:
+        ddp_kwargs = {}
+        if device.type == "cuda":
+            ddp_kwargs.update(device_ids=[args.local_rank], output_device=args.local_rank)
+        model = DistributedDataParallel(model, **ddp_kwargs)
 
     criterion = torch.nn.CrossEntropyLoss()
     if args.eval:
@@ -605,7 +714,7 @@ def main():
             **eval_stats,
         }
         write_log(args, stats, filename=f"{args.eval_split}_log.txt")
-        print(
+        main_print(
             f"Eval {args.eval_split}: "
             f"acc1={stats['val_acc1']:.2f} "
             f"acc5={stats['val_acc5']:.2f} "
@@ -623,8 +732,10 @@ def main():
         best_acc1 = 0.0
 
     for epoch in range(args.start_epoch, args.epochs):
+        if train_sampler is not None:
+            train_sampler.set_epoch(epoch)
         current_lr = optimizer.param_groups[0]["lr"]
-        print(f"Epoch {epoch}: lr={current_lr:.8g}")
+        main_print(f"Epoch {epoch}: lr={current_lr:.8g}")
         train_stats = train_one_epoch(model, train_loader, criterion, optimizer, scaler, device, epoch, args)
         val_stats = validate(model, val_loader, criterion, device, args)
         scheduler.step()
@@ -636,7 +747,7 @@ def main():
             **val_stats,
         }
         write_log(args, stats)
-        print(
+        main_print(
             f"Epoch {epoch} summary: "
             f"train_acc1={stats['train_fused_acc1']:.2f} "
             f"val_acc1={stats['val_acc1']:.2f} "
@@ -648,6 +759,15 @@ def main():
         if stats["val_acc1"] >= best_acc1:
             best_acc1 = stats["val_acc1"]
             save_checkpoint(args, model, optimizer, scheduler, epoch, best_acc1, "best")
+
+
+def main():
+    args = get_args()
+    init_distributed_mode(args)
+    try:
+        run(args)
+    finally:
+        cleanup_distributed()
 
 
 if __name__ == "__main__":
