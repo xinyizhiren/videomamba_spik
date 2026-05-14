@@ -14,13 +14,22 @@ env/
 # Local data and training artifacts
 data/
 local_data/
-outputs/
 outputs_server/
 checkpoints/
-logs/
 runs/
 wandb/
 tensorboard/
+
+# Training outputs: ignore artifacts by default, but keep log files trackable.
+outputs/**
+!outputs/**/
+!outputs/**/log.txt
+!outputs/**/*_log.txt
+!outputs/**/*.log
+logs/**
+!logs/**/
+!logs/**/*.txt
+!logs/**/*.log
 
 # Model checkpoints, weights, and generated arrays
 *.pth
@@ -34,6 +43,11 @@ tensorboard/
 # Logs and scheduler output
 *.log
 *.out
+!outputs/**/*.log
+!outputs/**/log.txt
+!outputs/**/*_log.txt
+!logs/**/*.log
+!logs/**/*.txt
 
 # OS noise
 .DS_Store
