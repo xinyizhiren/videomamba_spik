@@ -9,7 +9,7 @@ NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
 NNODES="${NNODES:-1}"
 NODE_RANK="${NODE_RANK:-0}"
 MASTER_ADDR="${MASTER_ADDR:-127.0.0.1}"
-MASTER_PORT="${MASTER_PORT:-29500}"
+MASTER_PORT="${MASTER_PORT:-29501}"
 
 # 正式 clean 训练实验名，同时决定默认输出目录名。
 JOB_NAME='videomamba_small_cv_train12_test3_ann_clean_full'
