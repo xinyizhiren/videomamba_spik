@@ -1,0 +1,420 @@
+VideoMamba structure inspection
+================================
+model_variant: ann
+checkpoint: <none>
+total_modules: 321
+total_params: 25431948
+total_buffers: 0
+
+Main structure modules
+----------------------
+<root>	CleanVideoMamba	direct_params=82176
+patch_embed	PatchEmbed	direct_params=0
+layers.0	Block	direct_params=0
+layers.0.mixer	Mamba	direct_params=26112
+layers.1	Block	direct_params=0
+layers.1.mixer	Mamba	direct_params=26112
+layers.2	Block	direct_params=0
+layers.2.mixer	Mamba	direct_params=26112
+layers.3	Block	direct_params=0
+layers.3.mixer	Mamba	direct_params=26112
+layers.4	Block	direct_params=0
+layers.4.mixer	Mamba	direct_params=26112
+layers.5	Block	direct_params=0
+layers.5.mixer	Mamba	direct_params=26112
+layers.6	Block	direct_params=0
+layers.6.mixer	Mamba	direct_params=26112
+layers.7	Block	direct_params=0
+layers.7.mixer	Mamba	direct_params=26112
+layers.8	Block	direct_params=0
+layers.8.mixer	Mamba	direct_params=26112
+layers.9	Block	direct_params=0
+layers.9.mixer	Mamba	direct_params=26112
+layers.10	Block	direct_params=0
+layers.10.mixer	Mamba	direct_params=26112
+layers.11	Block	direct_params=0
+layers.11.mixer	Mamba	direct_params=26112
+layers.12	Block	direct_params=0
+layers.12.mixer	Mamba	direct_params=26112
+layers.13	Block	direct_params=0
+layers.13.mixer	Mamba	direct_params=26112
+layers.14	Block	direct_params=0
+layers.14.mixer	Mamba	direct_params=26112
+layers.15	Block	direct_params=0
+layers.15.mixer	Mamba	direct_params=26112
+layers.16	Block	direct_params=0
+layers.16.mixer	Mamba	direct_params=26112
+layers.17	Block	direct_params=0
+layers.17.mixer	Mamba	direct_params=26112
+layers.18	Block	direct_params=0
+layers.18.mixer	Mamba	direct_params=26112
+layers.19	Block	direct_params=0
+layers.19.mixer	Mamba	direct_params=26112
+layers.20	Block	direct_params=0
+layers.20.mixer	Mamba	direct_params=26112
+layers.21	Block	direct_params=0
+layers.21.mixer	Mamba	direct_params=26112
+layers.22	Block	direct_params=0
+layers.22.mixer	Mamba	direct_params=26112
+layers.23	Block	direct_params=0
+layers.23.mixer	Mamba	direct_params=26112
+
+Activation module summary
+-------------------------
+SiLU: 24
+
+Activation module list
+----------------------
+layers.0.mixer.act	SiLU
+layers.1.mixer.act	SiLU
+layers.2.mixer.act	SiLU
+layers.3.mixer.act	SiLU
+layers.4.mixer.act	SiLU
+layers.5.mixer.act	SiLU
+layers.6.mixer.act	SiLU
+layers.7.mixer.act	SiLU
+layers.8.mixer.act	SiLU
+layers.9.mixer.act	SiLU
+layers.10.mixer.act	SiLU
+layers.11.mixer.act	SiLU
+layers.12.mixer.act	SiLU
+layers.13.mixer.act	SiLU
+layers.14.mixer.act	SiLU
+layers.15.mixer.act	SiLU
+layers.16.mixer.act	SiLU
+layers.17.mixer.act	SiLU
+layers.18.mixer.act	SiLU
+layers.19.mixer.act	SiLU
+layers.20.mixer.act	SiLU
+layers.21.mixer.act	SiLU
+layers.22.mixer.act	SiLU
+layers.23.mixer.act	SiLU
+
+ReLU/ReLU6 replacement candidates
+--------------------------------
+none
+Verdict: pure ReLU/ReLU6-to-spike replacement would convert 0 layers.
+
+Module tree
+-----------
+<root>: CleanVideoMamba direct_params=82176 direct_buffers=0 children=7
+  patch_embed: PatchEmbed direct_params=0 direct_buffers=0 children=1
+    patch_embed.proj: Conv3d direct_params=295296 direct_buffers=0 children=0
+  pos_drop: Dropout direct_params=0 direct_buffers=0 children=0
+  head_drop: Identity direct_params=0 direct_buffers=0 children=0
+  head: Linear direct_params=4620 direct_buffers=0 children=0
+  drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+  layers: ModuleList direct_params=0 direct_buffers=0 children=24
+    layers.0: Block direct_params=0 direct_buffers=0 children=3
+      layers.0.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.0.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.0.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.0.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.0.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.0.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.0.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.0.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.0.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.0.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.0.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.0.drop_path: Identity direct_params=0 direct_buffers=0 children=0
+    layers.1: Block direct_params=0 direct_buffers=0 children=3
+      layers.1.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.1.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.1.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.1.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.1.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.1.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.1.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.1.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.1.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.1.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.1.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.1.drop_path: Identity direct_params=0 direct_buffers=0 children=0
+    layers.2: Block direct_params=0 direct_buffers=0 children=3
+      layers.2.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.2.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.2.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.2.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.2.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.2.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.2.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.2.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.2.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.2.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.2.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.2.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.3: Block direct_params=0 direct_buffers=0 children=3
+      layers.3.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.3.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.3.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.3.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.3.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.3.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.3.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.3.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.3.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.3.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.3.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.3.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.4: Block direct_params=0 direct_buffers=0 children=3
+      layers.4.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.4.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.4.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.4.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.4.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.4.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.4.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.4.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.4.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.4.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.4.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.4.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.5: Block direct_params=0 direct_buffers=0 children=3
+      layers.5.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.5.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.5.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.5.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.5.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.5.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.5.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.5.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.5.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.5.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.5.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.5.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.6: Block direct_params=0 direct_buffers=0 children=3
+      layers.6.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.6.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.6.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.6.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.6.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.6.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.6.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.6.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.6.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.6.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.6.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.6.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.7: Block direct_params=0 direct_buffers=0 children=3
+      layers.7.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.7.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.7.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.7.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.7.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.7.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.7.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.7.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.7.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.7.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.7.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.7.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.8: Block direct_params=0 direct_buffers=0 children=3
+      layers.8.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.8.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.8.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.8.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.8.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.8.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.8.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.8.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.8.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.8.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.8.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.8.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.9: Block direct_params=0 direct_buffers=0 children=3
+      layers.9.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.9.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.9.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.9.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.9.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.9.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.9.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.9.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.9.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.9.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.9.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.9.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.10: Block direct_params=0 direct_buffers=0 children=3
+      layers.10.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.10.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.10.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.10.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.10.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.10.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.10.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.10.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.10.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.10.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.10.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.10.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.11: Block direct_params=0 direct_buffers=0 children=3
+      layers.11.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.11.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.11.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.11.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.11.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.11.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.11.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.11.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.11.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.11.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.11.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.11.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.12: Block direct_params=0 direct_buffers=0 children=3
+      layers.12.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.12.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.12.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.12.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.12.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.12.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.12.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.12.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.12.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.12.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.12.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.12.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.13: Block direct_params=0 direct_buffers=0 children=3
+      layers.13.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.13.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.13.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.13.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.13.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.13.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.13.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.13.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.13.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.13.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.13.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.13.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.14: Block direct_params=0 direct_buffers=0 children=3
+      layers.14.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.14.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.14.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.14.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.14.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.14.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.14.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.14.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.14.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.14.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.14.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.14.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.15: Block direct_params=0 direct_buffers=0 children=3
+      layers.15.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.15.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.15.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.15.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.15.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.15.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.15.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.15.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.15.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.15.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.15.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.15.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.16: Block direct_params=0 direct_buffers=0 children=3
+      layers.16.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.16.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.16.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.16.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.16.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.16.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.16.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.16.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.16.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.16.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.16.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.16.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.17: Block direct_params=0 direct_buffers=0 children=3
+      layers.17.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.17.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.17.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.17.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.17.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.17.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.17.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.17.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.17.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.17.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.17.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.17.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.18: Block direct_params=0 direct_buffers=0 children=3
+      layers.18.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.18.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.18.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.18.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.18.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.18.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.18.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.18.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.18.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.18.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.18.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.18.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.19: Block direct_params=0 direct_buffers=0 children=3
+      layers.19.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.19.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.19.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.19.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.19.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.19.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.19.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.19.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.19.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.19.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.19.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.19.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.20: Block direct_params=0 direct_buffers=0 children=3
+      layers.20.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.20.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.20.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.20.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.20.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.20.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.20.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.20.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.20.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.20.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.20.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.20.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.21: Block direct_params=0 direct_buffers=0 children=3
+      layers.21.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.21.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.21.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.21.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.21.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.21.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.21.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.21.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.21.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.21.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.21.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.21.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.22: Block direct_params=0 direct_buffers=0 children=3
+      layers.22.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.22.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.22.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.22.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.22.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.22.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.22.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.22.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.22.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.22.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.22.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.22.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+    layers.23: Block direct_params=0 direct_buffers=0 children=3
+      layers.23.mixer: Mamba direct_params=26112 direct_buffers=0 children=9
+        layers.23.mixer.in_proj: Linear direct_params=589824 direct_buffers=0 children=0
+        layers.23.mixer.conv1d: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.23.mixer.act: SiLU direct_params=0 direct_buffers=0 children=0
+        layers.23.mixer.x_proj: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.23.mixer.dt_proj: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.23.mixer.conv1d_b: Conv1d direct_params=3840 direct_buffers=0 children=0
+        layers.23.mixer.x_proj_b: Linear direct_params=43008 direct_buffers=0 children=0
+        layers.23.mixer.dt_proj_b: Linear direct_params=19200 direct_buffers=0 children=0
+        layers.23.mixer.out_proj: Linear direct_params=294912 direct_buffers=0 children=0
+      layers.23.norm: LayerNorm direct_params=768 direct_buffers=0 children=0
+      layers.23.drop_path: DropPath direct_params=0 direct_buffers=0 children=0
+  norm_f: LayerNorm direct_params=768 direct_buffers=0 children=0
