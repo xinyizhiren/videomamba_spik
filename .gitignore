@@ -25,6 +25,7 @@ outputs/**
 !outputs/**/
 !outputs/**/log.txt
 !outputs/**/*_log.txt
+!outputs/**/*.txt
 !outputs/**/*.log
 logs/**
 !logs/**/
@@ -46,6 +47,7 @@ logs/**
 !outputs/**/*.log
 !outputs/**/log.txt
 !outputs/**/*_log.txt
+!outputs/**/*.txt
 !logs/**/*.log
 !logs/**/*.txt
 
