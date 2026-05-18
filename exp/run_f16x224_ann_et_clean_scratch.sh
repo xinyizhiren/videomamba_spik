@@ -31,7 +31,7 @@ SPIK_PATCH_SIZE="${SPIK_PATCH_SIZE:-14}"
 SPIK_EMBED_DIMS="${SPIK_EMBED_DIMS:-384}"
 
 # BATCH_SIZE 是每张卡每个 mini-batch 的样本数；多卡时全局 batch 会变大。
-BATCH_SIZE="${BATCH_SIZE:-8}"
+BATCH_SIZE="${BATCH_SIZE:-4}"
 EPOCHS="${EPOCHS:-120}"
 # scratch 比微调给更长 warmup 和略高 LR；如不稳定可先降到 1e-4。
 LR="${LR:-3e-4}"
