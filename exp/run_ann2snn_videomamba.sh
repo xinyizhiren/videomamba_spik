@@ -15,7 +15,7 @@ DATA_PATH="${DATA_PATH:-/data/users/ouyangys/data/multiview_action_videos/}"
 PREFIX="${PREFIX:-${DATA_PATH}}"
 
 # The ANN checkpoint is expected next to the training log.txt.
-ANN_OUTPUT_DIR="${ANN_OUTPUT_DIR:-${PROJECT_DIR}/outputs/videomamba_small_cv_train12_test3_ann_clean_scratch}"
+ANN_OUTPUT_DIR="${ANN_OUTPUT_DIR:-${PROJECT_DIR}/outputs/videomamba_small_cv_train12_test3_ann_clean_full}"
 ANN_CHECKPOINT="${ANN_CHECKPOINT:-${ANN_OUTPUT_DIR}/best.pth}"
 ANN_LOG="${ANN_LOG:-${ANN_OUTPUT_DIR}/log.txt}"
 
