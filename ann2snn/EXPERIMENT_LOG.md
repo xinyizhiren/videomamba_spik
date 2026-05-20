@@ -107,3 +107,24 @@ Success criterion:
 5. Add a dedicated launcher under `exp/`, initialized from the ANN `best.pth`.
 6. Run tiny-overfit first, then full train.
 
+## 2026-05-20 Implementation Update
+
+Added the first trainable SNN fine-tuning path:
+
+- Model entry: `videomamba_small_trainable_snn`.
+- Launcher: `exp/run_f16x224_trainable_snn.sh`.
+- Default setup: spike after block `0`, `T=4`, no patch spike, signed trainable thresholds.
+- Initialization: load compatible weights from the trained ANN `best.pth`.
+- Training aid: frozen ANN teacher distillation from the same checkpoint, controlled by `DISTILL_WEIGHT`.
+
+First recommended smoke run:
+
+```bash
+DEBUG_OVERFIT_SAMPLES=48 EPOCHS=3 BATCH_SIZE=1 SNN_TIMESTEPS=2 bash exp/run_f16x224_trainable_snn.sh
+```
+
+First full run:
+
+```bash
+bash exp/run_f16x224_trainable_snn.sh
+```

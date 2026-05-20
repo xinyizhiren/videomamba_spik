@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.distributed as dist
+import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel
 
 from datasets.multiview_action_clean import CrossViewTrainDataset, SingleViewDataset, VideoTransform
@@ -22,6 +23,8 @@ MODEL_ALIASES = {
     "videomamba_small_clean": "videomamba_small_clean",
     "spikmamba": "spikmamba_fixed",
     "spikmamba_fixed": "spikmamba_fixed",
+    "videomamba_small_trainable_snn": "videomamba_small_trainable_snn",
+    "trainable_snn": "videomamba_small_trainable_snn",
 }
 
 
@@ -64,6 +67,14 @@ def main_print(*values, **kwargs):
 
 def unwrap_model(model):
     return model.module if hasattr(model, "module") else model
+
+
+def reset_stateful_modules(model):
+    target = unwrap_model(model)
+    if hasattr(target, "reset_spike_state"):
+        target.reset_spike_state()
+    elif hasattr(target, "reset_states"):
+        target.reset_states()
 
 
 class DistributedEvalSampler(torch.utils.data.Sampler):
@@ -151,6 +162,19 @@ def get_args():
     parser.add_argument("--spik_time_steps", default=1, type=int)
     parser.add_argument("--spik_bimamba", action="store_true", default=True)
     parser.add_argument("--no_spik_bimamba", action="store_false", dest="spik_bimamba")
+    parser.add_argument("--snn_block_indices", default="0")
+    parser.add_argument("--snn_spike_patch", action="store_true", default=False)
+    parser.add_argument("--snn_unsigned_spikes", action="store_false", dest="snn_signed_spikes")
+    parser.add_argument("--snn_timesteps", default=4, type=int)
+    parser.add_argument("--snn_threshold_init", default=1.0, type=float)
+    parser.add_argument("--snn_threshold_percentile", default=0.99, type=float)
+    parser.add_argument("--snn_fixed_threshold", action="store_false", dest="snn_train_threshold")
+    parser.add_argument("--snn_surrogate_alpha", default=4.0, type=float)
+    parser.add_argument("--spike_lr_multiplier", default=5.0, type=float)
+    parser.add_argument("--distill_weight", default=0.0, type=float)
+    parser.add_argument("--distill_temperature", default=2.0, type=float)
+    parser.add_argument("--teacher_checkpoint", default="")
+    parser.set_defaults(snn_signed_spikes=True, snn_train_threshold=True)
 
     parser.add_argument("--train_crop_min_scale", default=0.5, type=float)
     parser.add_argument("--train_crop_max_scale", default=1.0, type=float)
@@ -261,6 +285,15 @@ def normalize_model_name(model_name):
     return normalized
 
 
+def parse_int_tuple(text):
+    values = []
+    for part in str(text).split(","):
+        part = part.strip()
+        if part:
+            values.append(int(part))
+    return tuple(values)
+
+
 def build_model(args):
     model_name = normalize_model_name(args.model)
     args.model = model_name
@@ -273,6 +306,27 @@ def build_model(args):
             fc_drop_rate=args.fc_drop_rate,
             drop_path=args.drop_path,
             use_mean_pooling=args.use_mean_pooling,
+        )
+
+    if model_name == "videomamba_small_trainable_snn":
+        from models.videomamba_trainable_snn import create_videomamba_small_trainable_snn
+
+        return create_videomamba_small_trainable_snn(
+            img_size=args.input_size,
+            num_classes=args.nb_classes,
+            num_frames=args.num_frames,
+            tubelet_size=args.tubelet_size,
+            fc_drop_rate=args.fc_drop_rate,
+            drop_path=args.drop_path,
+            use_mean_pooling=args.use_mean_pooling,
+            spike_patch=args.snn_spike_patch,
+            spike_block_indices=parse_int_tuple(args.snn_block_indices),
+            snn_timesteps=args.snn_timesteps,
+            signed_spikes=args.snn_signed_spikes,
+            threshold_init=args.snn_threshold_init,
+            threshold_percentile=args.snn_threshold_percentile,
+            train_threshold=args.snn_train_threshold,
+            surrogate_alpha=args.snn_surrogate_alpha,
         )
 
     if model_name == "spikmamba_fixed":
@@ -370,6 +424,29 @@ def load_pretrained(model, path, model_key, min_load_ratio=0.05):
         main_print(f"First skipped keys: {skipped[:8]}")
 
 
+def build_teacher(args, device):
+    if args.distill_weight <= 0:
+        return None
+    checkpoint_path = args.teacher_checkpoint or args.finetune
+    if not checkpoint_path:
+        raise ValueError("--distill_weight > 0 requires --teacher_checkpoint or --finetune.")
+    teacher = create_videomamba_small_clean(
+        img_size=args.input_size,
+        num_classes=args.nb_classes,
+        num_frames=args.num_frames,
+        tubelet_size=args.tubelet_size,
+        fc_drop_rate=0.0,
+        drop_path=0.0,
+        use_mean_pooling=args.use_mean_pooling,
+    )
+    load_pretrained(teacher, checkpoint_path, args.model_key, min_load_ratio=0.05)
+    teacher.to(device).eval()
+    for param in teacher.parameters():
+        param.requires_grad_(False)
+    main_print(f"Using ANN teacher checkpoint: {checkpoint_path}")
+    return teacher
+
+
 def save_checkpoint(args, model, optimizer, scheduler, epoch, best_acc1, name):
     if not is_main_process():
         return
@@ -432,6 +509,35 @@ def make_scheduler(optimizer, args):
     return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
 
 
+def make_optimizer(model, args):
+    base_params = []
+    spike_params = []
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+        if "spike" in name or "log_threshold" in name:
+            spike_params.append(param)
+        else:
+            base_params.append(param)
+
+    param_groups = []
+    if base_params:
+        param_groups.append({"params": base_params, "lr": args.lr, "weight_decay": args.weight_decay})
+    if spike_params:
+        param_groups.append(
+            {
+                "params": spike_params,
+                "lr": args.lr * args.spike_lr_multiplier,
+                "weight_decay": 0.0,
+            }
+        )
+        main_print(
+            f"Spike parameter group: {len(spike_params)} tensors, "
+            f"lr={args.lr * args.spike_lr_multiplier:.8g}"
+        )
+    return torch.optim.AdamW(param_groups, lr=args.lr, weight_decay=args.weight_decay)
+
+
 def amp_context(device, args):
     if device.type != "cuda" or not args.bf16:
         return contextlib.nullcontext()
@@ -479,6 +585,15 @@ def forward_train_logits(model, view1, view2):
     return model_outputs[:3]
 
 
+def distillation_kl(student_logits, teacher_logits, temperature):
+    temperature = max(float(temperature), 1e-6)
+    return F.kl_div(
+        F.log_softmax(student_logits / temperature, dim=1),
+        F.softmax(teacher_logits / temperature, dim=1),
+        reduction="batchmean",
+    ) * (temperature ** 2)
+
+
 def reduce_metrics(totals, hists, device, prefix, elapsed=None):
     total_keys = list(totals)
     total_tensor = torch.tensor([float(totals[key]) for key in total_keys], dtype=torch.float64, device=device)
@@ -503,13 +618,16 @@ def reduce_metrics(totals, hists, device, prefix, elapsed=None):
     return stats
 
 
-def train_one_epoch(model, loader, criterion, optimizer, scaler, device, epoch, args):
+def train_one_epoch(model, loader, criterion, optimizer, scaler, device, epoch, args, teacher_model=None):
     model.train()
+    if teacher_model is not None:
+        teacher_model.eval()
     optimizer.zero_grad(set_to_none=True)
     totals = {
         "loss": 0.0,
         "fused_ce_loss": 0.0,
         "view_ce_loss": 0.0,
+        "distill_loss": 0.0,
         "fused_acc1": 0.0,
         "fused_acc5": 0.0,
         "view1_acc1": 0.0,
@@ -528,10 +646,25 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler, device, epoch, 
         view1, view2, target = move_train_batch(batch, device)
         sync_grad = (step + 1) % args.update_freq == 0 or (step + 1) == len(loader)
         with amp_context(device, args):
+            reset_stateful_modules(model)
             fused_logits, view1_logits, view2_logits = forward_train_logits(model, view1, view2)
             fused_ce = criterion(fused_logits, target)
             view_ce = 0.5 * (criterion(view1_logits, target) + criterion(view2_logits, target))
-            loss = args.fused_ce_loss_weight * fused_ce + args.view_ce_loss_weight * view_ce
+            distill_loss = fused_logits.new_zeros(())
+            if teacher_model is not None and args.distill_weight > 0:
+                with torch.no_grad():
+                    reset_stateful_modules(teacher_model)
+                    teacher_fused, teacher_view1, teacher_view2 = forward_train_logits(teacher_model, view1, view2)
+                distill_loss = (
+                    distillation_kl(fused_logits, teacher_fused, args.distill_temperature)
+                    + 0.5 * distillation_kl(view1_logits, teacher_view1, args.distill_temperature)
+                    + 0.5 * distillation_kl(view2_logits, teacher_view2, args.distill_temperature)
+                ) / 2.0
+            loss = (
+                args.fused_ce_loss_weight * fused_ce
+                + args.view_ce_loss_weight * view_ce
+                + args.distill_weight * distill_loss
+            )
             loss_for_backward = loss / args.update_freq
 
         backward_context = (
@@ -565,6 +698,7 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler, device, epoch, 
         totals["loss"] += loss.item() * batch_size
         totals["fused_ce_loss"] += fused_ce.item() * batch_size
         totals["view_ce_loss"] += view_ce.item() * batch_size
+        totals["distill_loss"] += distill_loss.item() * batch_size
         totals["fused_acc1"] += fused_acc1 * batch_size
         totals["fused_acc5"] += fused_acc5 * batch_size
         totals["view1_acc1"] += view1_acc1 * batch_size
@@ -597,6 +731,7 @@ def validate(model, loader, criterion, device, args):
         video = video.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True).long()
         with amp_context(device, args):
+            reset_stateful_modules(model)
             logits = model(video)
             loss = criterion(logits, target)
 
@@ -694,6 +829,7 @@ def run(args):
     if not (args.eval and eval_checkpoint):
         load_pretrained(model, args.finetune, args.model_key, args.min_pretrained_load_ratio)
     model.to(device)
+    teacher_model = None if args.eval else build_teacher(args, device)
     if args.distributed:
         ddp_kwargs = {}
         if device.type == "cuda":
@@ -722,7 +858,7 @@ def run(args):
         )
         return
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = make_optimizer(model, args)
     scheduler = make_scheduler(optimizer, args)
     scaler = torch.cuda.amp.GradScaler(enabled=False)
 
@@ -736,7 +872,17 @@ def run(args):
             train_sampler.set_epoch(epoch)
         current_lr = optimizer.param_groups[0]["lr"]
         main_print(f"Epoch {epoch}: lr={current_lr:.8g}")
-        train_stats = train_one_epoch(model, train_loader, criterion, optimizer, scaler, device, epoch, args)
+        train_stats = train_one_epoch(
+            model,
+            train_loader,
+            criterion,
+            optimizer,
+            scaler,
+            device,
+            epoch,
+            args,
+            teacher_model=teacher_model,
+        )
         val_stats = validate(model, val_loader, criterion, device, args)
         scheduler.step()
 
