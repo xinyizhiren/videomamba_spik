@@ -27,6 +27,7 @@ outputs/**
 !outputs/**/*_log.txt
 !outputs/**/*.txt
 !outputs/**/*.log
+!outputs/**/conversion_summary.json
 logs/**
 !logs/**/
 !logs/**/*.txt
@@ -48,6 +49,7 @@ logs/**
 !outputs/**/log.txt
 !outputs/**/*_log.txt
 !outputs/**/*.txt
+!outputs/**/conversion_summary.json
 !logs/**/*.log
 !logs/**/*.txt
 
