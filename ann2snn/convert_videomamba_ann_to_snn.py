@@ -193,6 +193,9 @@ def main():
         "spike_patch": args.spike_patch,
         "spike_block_indices": list(spike_block_indices),
         "signed_spikes": args.signed_spikes,
+        "threshold_scale": args.threshold_scale,
+        "calibration_samples": args.calibration_samples,
+        "calibration_steps": args.calibration_steps,
         **calibration_stats,
     }
 

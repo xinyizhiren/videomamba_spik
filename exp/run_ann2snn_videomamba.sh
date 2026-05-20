@@ -46,6 +46,8 @@ if [ ! -f "${ANN_LOG}" ]; then
         echo "Warning: ANN log file not found at ${ANN_LOG}" >&2
 fi
 
+mkdir -p "${OUTPUT_DIR}"
+
 SPIKE_PATCH_ARGS=(--no_spike_patch)
 if [ "${SPIKE_PATCH}" != "0" ]; then
         SPIKE_PATCH_ARGS=(--spike_patch)
@@ -69,4 +71,5 @@ python "${PROJECT_DIR}/ann2snn/convert_videomamba_ann_to_snn.py" \
         --threshold_scale "${THRESHOLD_SCALE}" \
         --device cuda \
         --dump_layer_order \
-        "${SPIKE_PATCH_ARGS[@]}"
+        "${SPIKE_PATCH_ARGS[@]}" \
+        2>&1 | tee "${OUTPUT_DIR}/run_log.txt"
