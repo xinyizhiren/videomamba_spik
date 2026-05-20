@@ -334,3 +334,28 @@ This makes each scope expansion easier to audit:
 For trainable SNN runs, spike thresholds are initialized from one training batch before this initial validation, so the validation set is not used for threshold calibration.
 
 Use `--skip_initial_eval` only when intentionally skipping this extra validation pass.
+
+## 2026-05-20 Full Mamba-Block Spike Update
+
+Because wider scopes still have strong pre-training validation, the default scope-ablation job now jumps from the trained `0..3` SNN directly to all 24 Mamba blocks:
+
+```bash
+bash exp/run_f16x224_trainable_snn_scope_ablation.sh
+```
+
+This defaults to:
+
+- job: `block0to23_from_block0123`
+- init checkpoint: `outputs/videomamba_small_trainable_snn_b0-3_t4_from_b0-1/best.pth`
+- `SNN_BLOCK_INDICES=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23`
+- `SNN_SPIKE_PATCH=0`
+- `SNN_TIMESTEPS=4`
+
+The patch embedding spike is still kept off. Test it separately after the all-block spike result is known.
+
+Model structure output:
+
+- training now calls `from torchinfo import summary` when `DUMP_MODEL_SUMMARY=1`;
+- default launcher sets `DUMP_MODEL_SUMMARY=1`;
+- summary is written to `outputs/<job>/model_summary.txt`;
+- active spike modules are also printed at startup and saved in `run_metadata.json`.

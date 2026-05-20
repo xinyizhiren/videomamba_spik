@@ -163,6 +163,8 @@ def get_args():
     parser.add_argument("--eval_split", default="test", choices=("validation", "test"))
     parser.add_argument("--eval_checkpoint", default="", help="Checkpoint path for eval-only mode.")
     parser.add_argument("--skip_initial_eval", action="store_true", default=False)
+    parser.add_argument("--dump_model_summary", action="store_true", default=False)
+    parser.add_argument("--summary_depth", default=5, type=int)
 
     parser.add_argument("--input_size", default=224, type=int)
     parser.add_argument("--short_side_size", default=224, type=int)
@@ -787,6 +789,52 @@ def initialize_spikes_from_train_batch(model, loader, device, args):
     main_print("Initialized spike thresholds from one training batch before initial validation.")
 
 
+@torch.no_grad()
+def dump_model_summary(args, model, device):
+    if not is_main_process() or not args.dump_model_summary:
+        return
+    output_path = Path(args.output_dir) / "model_summary.txt"
+    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+    try:
+        from torchinfo import summary
+    except ImportError as exc:
+        message = (
+            "torchinfo is not installed; cannot write model summary.\n"
+            "Install it with: pip install torchinfo\n"
+            f"ImportError: {exc}\n"
+        )
+        output_path.write_text(message, encoding="utf-8")
+        main_print(message.strip())
+        return
+
+    target = unwrap_model(model)
+    was_training = target.training
+    target.eval()
+    reset_stateful_modules(target)
+    dummy = torch.zeros(
+        1,
+        3,
+        args.num_frames,
+        args.input_size,
+        args.input_size,
+        device=device,
+    )
+    try:
+        with amp_context(device, args):
+            model_summary = summary(
+                target,
+                input_data=dummy,
+                depth=args.summary_depth,
+                col_names=("input_size", "output_size", "num_params", "trainable"),
+                verbose=0,
+            )
+        output_path.write_text(str(model_summary) + "\n", encoding="utf-8")
+        main_print(f"Saved torchinfo model summary to {output_path}")
+    finally:
+        reset_stateful_modules(target)
+        target.train(was_training)
+
+
 def write_log(args, stats, filename="log.txt"):
     if not is_main_process():
         return
@@ -934,8 +982,12 @@ def run(args):
     else:
         best_acc1 = 0.0
 
-    if not args.skip_initial_eval:
+    if not args.skip_initial_eval or args.dump_model_summary:
         initialize_spikes_from_train_batch(model, train_loader, device, args)
+
+    dump_model_summary(args, model, device)
+
+    if not args.skip_initial_eval:
         initial_val_stats = validate(model, val_loader, criterion, device, args)
         initial_stats = {
             "mode": "initial_eval",

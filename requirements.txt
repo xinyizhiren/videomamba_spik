@@ -5,6 +5,7 @@ decord
 einops
 timm
 tqdm
+torchinfo
 
 # Required by VideoMamba/Mamba kernels in normal training environments.
 mamba-ssm
