@@ -53,23 +53,32 @@ if [ "${SPIKE_PATCH}" != "0" ]; then
         SPIKE_PATCH_ARGS=(--spike_patch)
 fi
 
-python "${PROJECT_DIR}/ann2snn/convert_videomamba_ann_to_snn.py" \
-        --checkpoint "${ANN_CHECKPOINT}" \
-        --data_path "${DATA_PATH}" \
-        --prefix "${PREFIX}" \
-        --output_dir "${OUTPUT_DIR}" \
-        --calib_view_csv 'aligned_v01_1.csv' \
-        --val_view_csv 'v03_val_set.csv' \
-        --test_view_csv 'v03_test_set.csv' \
-        --batch_size "${BATCH_SIZE}" \
-        --num_workers "${NUM_WORKERS}" \
-        --calibration_samples "${CALIBRATION_SAMPLES}" \
-        --calibration_steps "${CALIBRATION_STEPS}" \
-        --timesteps "${TIMESTEPS}" \
-        --delay "${DELAY}" \
-        --spike_block_indices "${SPIKE_BLOCK_INDICES}" \
-        --threshold_scale "${THRESHOLD_SCALE}" \
-        --device cuda \
-        --dump_layer_order \
-        "${SPIKE_PATCH_ARGS[@]}" \
-        2>&1 | tee "${OUTPUT_DIR}/run_log.txt"
+{
+        echo "RUN_NAME=${RUN_NAME}"
+        echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
+        echo "ANN_CHECKPOINT=${ANN_CHECKPOINT}"
+        echo "OUTPUT_DIR=${OUTPUT_DIR}"
+        echo "SPIKE_PATCH=${SPIKE_PATCH}"
+        echo "SPIKE_BLOCK_INDICES=${SPIKE_BLOCK_INDICES}"
+        echo "THRESHOLD_SCALE=${THRESHOLD_SCALE}"
+
+        python "${PROJECT_DIR}/ann2snn/convert_videomamba_ann_to_snn.py" \
+                --checkpoint "${ANN_CHECKPOINT}" \
+                --data_path "${DATA_PATH}" \
+                --prefix "${PREFIX}" \
+                --output_dir "${OUTPUT_DIR}" \
+                --calib_view_csv 'aligned_v01_1.csv' \
+                --val_view_csv 'v03_val_set.csv' \
+                --test_view_csv 'v03_test_set.csv' \
+                --batch_size "${BATCH_SIZE}" \
+                --num_workers "${NUM_WORKERS}" \
+                --calibration_samples "${CALIBRATION_SAMPLES}" \
+                --calibration_steps "${CALIBRATION_STEPS}" \
+                --timesteps "${TIMESTEPS}" \
+                --delay "${DELAY}" \
+                --spike_block_indices "${SPIKE_BLOCK_INDICES}" \
+                --threshold_scale "${THRESHOLD_SCALE}" \
+                --device cuda \
+                --dump_layer_order \
+                "${SPIKE_PATCH_ARGS[@]}"
+} 2>&1 | tee "${OUTPUT_DIR}/run_log.txt"

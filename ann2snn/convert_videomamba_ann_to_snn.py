@@ -18,6 +18,8 @@ from ann2snn.spike_utils import (
     evaluate_ann_classifier,
     evaluate_snn_classifier,
     load_clean_checkpoint,
+    reset_model,
+    set_spike_mode,
     weight_scaling_iter_video,
 )
 from ann2snn.videomamba_ann2snn import create_videomamba_small_ann2snn
@@ -172,7 +174,10 @@ def main():
         ann_order_path = output_dir / "videomamba_ann_layer_order.txt"
         snn_order_path = output_dir / "videomamba_snn_layer_order.txt"
         dump_model_layer_order(ann_model, sample, ann_order_path)
+        set_spike_mode(snn_model, "passthrough")
         dump_model_layer_order(snn_model, sample, snn_order_path)
+        set_spike_mode(snn_model, "ann")
+        reset_model(snn_model)
         print(f"Saved ANN layer order to {ann_order_path}")
         print(f"Saved SNN layer order to {snn_order_path}")
 

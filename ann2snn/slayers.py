@@ -37,6 +37,9 @@ class _BaseSpikingNeuron(nn.Module):
     def _get_threshold(self, x):
         return self.thre
 
+    def _clip_to_threshold(self, x, threshold):
+        return torch.minimum(torch.clamp_min(x, 0.0), threshold)
+
     def optimize(self, x):
         base, sign = self._preprocess(x)
         ub = self._get_threshold(base)
@@ -44,10 +47,13 @@ class _BaseSpikingNeuron(nn.Module):
         self.thre += self.c * (2 * (base - ub) * (base > ub)).mean(reduce_dims, keepdim=True)
         self.delta = ((base - ub) * (base > ub).float()).mean().item()
 
-        clipped = torch.clamp(base, 0.0, ub)
+        clipped = self._clip_to_threshold(base, ub)
         return self._restore(clipped, sign)
 
     def forward(self, x):
+        if self.mode == "passthrough":
+            return x
+
         base, sign = self._preprocess(x)
         ub = self._get_threshold(base)
         reduce_dims = self._reduce_dims(base)
@@ -64,7 +70,7 @@ class _BaseSpikingNeuron(nn.Module):
         if self.mode == "clip":
             denom = base.mean(reduce_dims, keepdim=False).max() + 1e-6
             self.r = (ub.mean() / 2.0 / denom).item()
-            clipped = torch.clamp(base, 0.0, ub)
+            clipped = self._clip_to_threshold(base, ub)
             return self._restore(clipped, sign)
 
         if self.mode == "robust_norm":

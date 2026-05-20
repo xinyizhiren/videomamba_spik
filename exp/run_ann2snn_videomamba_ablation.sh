@@ -4,6 +4,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+# CUDA indexes start from 0, so the third physical GPU is index 2.
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-2}"
+
 # Job format: run_name:spike_patch:spike_block_indices:threshold_scale
 # Keep patch spike off first; add it only after block-boundary spike is stable.
 DEFAULT_JOBS="block0:0:0:1.0 block01:0:0,1:1.0 block0123:0:0,1,2,3:1.0"
@@ -16,6 +19,7 @@ ABLATION_JOBS="${ABLATION_JOBS:-${DEFAULT_JOBS}}"
 SUMMARY_OUTPUT="${SUMMARY_OUTPUT:-${PROJECT_DIR}/outputs/ann2snn_videomamba/ablation_summary.txt}"
 
 echo "ANN2SNN ablation jobs: ${ABLATION_JOBS}"
+echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
 echo "Summary will be written to: ${SUMMARY_OUTPUT}"
 
 for job in ${ABLATION_JOBS}; do
