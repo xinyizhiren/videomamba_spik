@@ -202,8 +202,50 @@ Recommended command:
 bash exp/run_f16x224_trainable_snn_scope_ablation.sh
 ```
 
-This runs `block01_from_block0` by default. After that succeeds, expand further with:
+Originally this ran `block01_from_block0` by default. After the `block0,1` result, use explicit jobs for the next expansion:
 
 ```bash
 ABLATION_JOBS=block0123_from_block01 bash exp/run_f16x224_trainable_snn_scope_ablation.sh
+```
+
+## 2026-05-20 Trainable `block0,1, T=4` Result
+
+Log path:
+
+```text
+outputs/videomamba_small_trainable_snn_b0-1_t4_from_b0/log.txt
+```
+
+Result:
+
+| run | blocks | T | init | epoch | train_acc1 | val_acc1 | val_loss |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `videomamba_small_trainable_snn_b0-1_t4_from_b0` | `0,1` | 4 | `block0 best` | 0 | 99.7890 | 93.3824 | 0.2359 |
+| `videomamba_small_trainable_snn_b0-1_t4_from_b0` | `0,1` | 4 | `block0 best` | 1 | 100.0000 | 91.9118 | 0.2644 |
+| `videomamba_small_trainable_snn_b0-1_t4_from_b0` | `0,1` | 4 | `block0 best` | 2 | 99.3671 | 88.2353 | 0.4779 |
+
+Interpretation:
+
+- `block0,1` does not collapse: the first epoch reaches `93.3824`, still close to the ANN baseline.
+- Later epochs drift downward as learning rate warms up to `3e-5`, so wider SNN scopes should use a shorter scout run, slightly lower LR, and stronger ANN distillation.
+- Because `block0,1` is viable, the next step can be bolder than one-block-at-a-time expansion.
+
+Updated scope-ablation defaults:
+
+- default jobs: `block0123_from_block01 block0to7_from_block01`
+- `EPOCHS=6`
+- `LR=2e-5`
+- `WARMUP_EPOCHS=1`
+- `DISTILL_WEIGHT=0.7`
+
+Recommended bold scout:
+
+```bash
+bash exp/run_f16x224_trainable_snn_scope_ablation.sh
+```
+
+Optional high-spike probe that also spikes the patch embedding:
+
+```bash
+ABLATION_JOBS=patch_block01_from_block01 bash exp/run_f16x224_trainable_snn_scope_ablation.sh
 ```
