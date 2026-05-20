@@ -77,6 +77,20 @@ def reset_stateful_modules(model):
         target.reset_states()
 
 
+def active_spike_module_names(model):
+    target = unwrap_model(model)
+    if hasattr(target, "active_spike_module_names"):
+        return list(target.active_spike_module_names())
+    return []
+
+
+def active_spike_parameter_names(model):
+    target = unwrap_model(model)
+    if hasattr(target, "active_spike_parameter_names"):
+        return set(target.active_spike_parameter_names())
+    return set()
+
+
 class DistributedEvalSampler(torch.utils.data.Sampler):
     def __init__(self, dataset, num_replicas=None, rank=None):
         if num_replicas is None:
@@ -513,11 +527,16 @@ def make_scheduler(optimizer, args):
 def make_optimizer(model, args):
     base_params = []
     spike_params = []
+    active_spike_params = active_spike_parameter_names(model)
     for name, param in model.named_parameters():
         if not param.requires_grad:
             continue
-        if "spike" in name or "log_threshold" in name:
+        normalized_name = name[len("module."):] if name.startswith("module.") else name
+        is_spike_like = "spike" in name or "log_threshold" in name
+        if normalized_name in active_spike_params or (not active_spike_params and is_spike_like):
             spike_params.append(param)
+        elif active_spike_params and is_spike_like:
+            continue
         else:
             base_params.append(param)
 
@@ -765,6 +784,8 @@ def write_run_metadata(args, model, teacher_model=None):
         "args": vars(args),
         "model_class": target.__class__.__name__,
         "teacher_class": teacher.__class__.__name__ if teacher is not None else None,
+        "active_spike_modules": active_spike_module_names(target),
+        "active_spike_parameter_names": sorted(active_spike_parameter_names(target)),
         "spike_patch": bool(getattr(target, "spike_patch", False)),
         "spike_block_indices": list(getattr(target, "spike_block_indices", [])),
         "snn_timesteps": getattr(target, "snn_timesteps", None),
@@ -845,6 +866,11 @@ def run(args):
 
     model = build_model(args)
     main_print(f"Built model: {args.model} ({model.__class__.__name__})")
+    spike_modules = active_spike_module_names(model)
+    if spike_modules:
+        main_print(f"Active spike modules ({len(spike_modules)}): {', '.join(spike_modules)}")
+    else:
+        main_print("Active spike modules: none")
     eval_checkpoint = args.eval_checkpoint or args.resume
     if not (args.eval and eval_checkpoint):
         load_pretrained(model, args.finetune, args.model_key, args.min_pretrained_load_ratio)

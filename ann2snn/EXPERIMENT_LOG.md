@@ -291,3 +291,26 @@ If we want to skip directly toward higher spike coverage:
 ```bash
 ABLATION_JOBS=block0to11_from_block0123 bash exp/run_f16x224_trainable_snn_scope_ablation.sh
 ```
+
+## 2026-05-20 Code Path Check
+
+The trainable SNN code does insert spike layers, but the insertion point is controlled:
+
+- `models/videomamba_trainable_snn.py` creates `block_spikes` from `SNN_BLOCK_INDICES`.
+- `forward_features()` calls `self.block_spikes[key](hidden_states)` after each selected VideoMamba block.
+- The spiked `hidden_states` is then passed into later blocks and into the final residual/norm path.
+- `SNN_SPIKE_PATCH=0` means the patch embedding spike is not active unless explicitly enabled.
+
+Repeated `94.8529` first-epoch validation accuracy does not by itself mean the spike modules are inactive. The validation set has 136 samples, so:
+
+- `94.8529` means 129/136 correct.
+- `94.1176` means 128/136 correct.
+- Several nearby models can land on the same integer correct count.
+
+To make future logs easier to audit, training now prints active spike modules and writes `run_metadata.json` with:
+
+- `model_class`
+- `active_spike_modules`
+- `spike_block_indices`
+- `spike_patch`
+- `snn_timesteps`

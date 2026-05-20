@@ -163,6 +163,20 @@ class TrainableVideoMambaSNN(CleanVideoMamba):
         for idx in self.spike_block_indices:
             yield self.block_spikes[str(idx)]
 
+    def active_spike_module_names(self):
+        names = []
+        if self.spike_patch:
+            names.append("patch_spike")
+        names.extend(f"block_spikes.{idx}" for idx in self.spike_block_indices)
+        return names
+
+    def active_spike_parameter_names(self):
+        names = []
+        if self.spike_patch:
+            names.append("patch_spike.log_threshold")
+        names.extend(f"block_spikes.{idx}.log_threshold" for idx in self.spike_block_indices)
+        return names
+
     def reset_spike_state(self):
         for module in self.iter_spike_modules():
             module.reset()
