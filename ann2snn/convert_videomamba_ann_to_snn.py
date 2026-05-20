@@ -64,6 +64,7 @@ def parse_args():
     parser.add_argument("--unsigned_spikes", action="store_false", dest="signed_spikes")
     parser.add_argument("--threshold_scale", type=float, default=1.0)
     parser.add_argument("--skip_eval", action="store_true")
+    parser.add_argument("--skip_save_checkpoint", action="store_true")
     parser.add_argument("--dump_layer_order", action="store_true")
     parser.set_defaults(spike_patch=True, signed_spikes=True)
     return parser.parse_args()
@@ -210,23 +211,26 @@ def main():
         test_metrics = evaluate_snn_classifier(test_loader, snn_model, device, args.timesteps, delay)
         metrics.update({f"test_{k}": v for k, v in test_metrics.items()})
 
-    save_path = output_dir / "videomamba_ann2snn.pth"
-    torch.save(
-        {
-            "model": snn_model.state_dict(),
-            "ann_checkpoint": args.checkpoint,
-            "timesteps": args.timesteps,
-            "delay": delay,
-            "metrics": metrics,
-            "args": vars(args),
-        },
-        save_path,
-    )
-    print(f"Saved SNN checkpoint to {save_path}")
-
     summary_path = output_dir / "conversion_summary.json"
     summary_path.write_text(json.dumps(metrics, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Saved summary to {summary_path}")
+
+    if not args.skip_save_checkpoint:
+        save_path = output_dir / "videomamba_ann2snn.pth"
+        torch.save(
+            {
+                "model": snn_model.state_dict(),
+                "ann_checkpoint": args.checkpoint,
+                "timesteps": args.timesteps,
+                "delay": delay,
+                "metrics": metrics,
+                "args": vars(args),
+            },
+            save_path,
+        )
+        print(f"Saved SNN checkpoint to {save_path}")
+    else:
+        print("Skipped saving SNN checkpoint.")
 
     if isinstance(checkpoint, dict) and "best_acc1" in checkpoint:
         print(f"Source ANN checkpoint best_acc1: {float(checkpoint['best_acc1']):.4f}")

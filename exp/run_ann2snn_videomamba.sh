@@ -35,6 +35,7 @@ CALIBRATION_STEPS="${CALIBRATION_STEPS:-200}"
 TIMESTEPS="${TIMESTEPS:-16}"
 DELAY="${DELAY:--1}"
 THRESHOLD_SCALE="${THRESHOLD_SCALE:-1.0}"
+SAVE_SNN_CHECKPOINT="${SAVE_SNN_CHECKPOINT:-0}"
 
 if [ ! -f "${ANN_CHECKPOINT}" ]; then
         echo "Missing ANN checkpoint: ${ANN_CHECKPOINT}" >&2
@@ -61,6 +62,12 @@ fi
         echo "SPIKE_PATCH=${SPIKE_PATCH}"
         echo "SPIKE_BLOCK_INDICES=${SPIKE_BLOCK_INDICES}"
         echo "THRESHOLD_SCALE=${THRESHOLD_SCALE}"
+        echo "SAVE_SNN_CHECKPOINT=${SAVE_SNN_CHECKPOINT}"
+
+        SAVE_ARGS=(--skip_save_checkpoint)
+        if [ "${SAVE_SNN_CHECKPOINT}" != "0" ]; then
+                SAVE_ARGS=()
+        fi
 
         python "${PROJECT_DIR}/ann2snn/convert_videomamba_ann_to_snn.py" \
                 --checkpoint "${ANN_CHECKPOINT}" \
@@ -80,5 +87,6 @@ fi
                 --threshold_scale "${THRESHOLD_SCALE}" \
                 --device cuda \
                 --dump_layer_order \
+                "${SAVE_ARGS[@]}" \
                 "${SPIKE_PATCH_ARGS[@]}"
 } 2>&1 | tee "${OUTPUT_DIR}/run_log.txt"
