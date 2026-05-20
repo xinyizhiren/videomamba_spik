@@ -1,0 +1,24 @@
+{
+  "checkpoint": "/data/users/ouyangys/code/videomamba_spik/outputs/videomamba_small_cv_train12_test3_ann_clean_full/best.pth",
+  "timesteps": 16,
+  "delay": 3,
+  "spike_patch": false,
+  "spike_block_indices": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "signed_spikes": true,
+  "threshold_scale": 1.0,
+  "calibration_samples": 256,
+  "calibration_steps": 200,
+  "calibration_mse": 0.0014422408994078251,
+  "calibration_delta": 0.004940815465000921,
+  "ann_acc1": 94.11764627344468,
+  "ann_acc5": 100.0,
+  "snn_acc1": 51.470586832831884,
+  "snn_acc5": 88.97058705722584,
+  "test_snn_acc1": 55.27950221707362,
+  "test_snn_acc5": 90.99378845262231
+}
