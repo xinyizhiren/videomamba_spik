@@ -21,7 +21,7 @@ DATA_PATH="${DATA_PATH:-/data/users/ouyangys/data/multiview_action_videos/}"
 PREFIX="${PREFIX:-${DATA_PATH}}"
 ANN_OUTPUT_DIR="${ANN_OUTPUT_DIR:-${PROJECT_DIR}/outputs/videomamba_small_cv_train12_test3_ann_clean_full}"
 MODEL_PATH="${MODEL_PATH:-${ANN_OUTPUT_DIR}/best.pth}"
-TEACHER_CHECKPOINT="${TEACHER_CHECKPOINT:-${MODEL_PATH}}"
+TEACHER_CHECKPOINT="${TEACHER_CHECKPOINT:-${ANN_OUTPUT_DIR}/best.pth}"
 
 SNN_BLOCK_INDICES="${SNN_BLOCK_INDICES:-0}"
 SNN_BLOCK_TAG="${SNN_BLOCK_INDICES//,/-}"

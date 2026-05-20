@@ -163,3 +163,47 @@ Launcher defaults were adjusted for the trainable SNN path:
 - `CUDNN_BENCHMARK=0`
 
 This keeps the effective batch size close to the original setting while reducing peak activation memory.
+
+## 2026-05-20 Trainable `block0, T=4` Result
+
+Log path:
+
+```text
+outputs/videomamba_small_trainable_snn_b0_t4/log.txt
+```
+
+Partial full-run result:
+
+| run | blocks | T | epoch | train_acc1 | val_acc1 | val_loss |
+| --- | --- | --- | --- | --- | --- | --- |
+| `videomamba_small_trainable_snn_b0_t4` | `0` | 4 | 0 | 99.3671 | 92.6471 | 0.2442 |
+| `videomamba_small_trainable_snn_b0_t4` | `0` | 4 | 1 | 99.5781 | 94.1176 | 0.2007 |
+| `videomamba_small_trainable_snn_b0_t4` | `0` | 4 | 2 | 99.1561 | 92.6471 | 0.3337 |
+| `videomamba_small_trainable_snn_b0_t4` | `0` | 4 | 3 | 98.9451 | 94.8529 | 0.1940 |
+| `videomamba_small_trainable_snn_b0_t4` | `0` | 4 | 4 | 100.0000 | 93.3824 | 0.2311 |
+| `videomamba_small_trainable_snn_b0_t4` | `0` | 4 | 5 | 99.7890 | 91.1765 | 0.3125 |
+
+Interpretation:
+
+- Best validation accuracy is `94.8529`, which is above the source ANN `94.1176`.
+- Trainable SNN recovered the post-training `block0` drop (`74.2647`) and is strong enough to expand the spiking scope.
+- Accuracy fluctuates because the validation set is small, so compare by best checkpoint and final test accuracy, not a single epoch.
+
+Next spiking-scope experiment:
+
+1. Initialize `block0,1` from the trained `block0` SNN `best.pth`.
+2. Keep the frozen ANN teacher as the original clean ANN `best.pth`.
+3. Keep `T=4`, `BATCH_SIZE=1`, `UPDATE_FREQ=2` first.
+4. If `block0,1` can stay near `90+`, expand to `block0,1,2,3`.
+
+Recommended command:
+
+```bash
+bash exp/run_f16x224_trainable_snn_scope_ablation.sh
+```
+
+This runs `block01_from_block0` by default. After that succeeds, expand further with:
+
+```bash
+ABLATION_JOBS=block0123_from_block01 bash exp/run_f16x224_trainable_snn_scope_ablation.sh
+```
