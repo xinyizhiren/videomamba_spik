@@ -27,6 +27,7 @@ outputs/**
 !outputs/**/*_log.txt
 !outputs/**/*.txt
 !outputs/**/*.log
+!outputs/**/run_metadata.json
 !outputs/**/conversion_summary.json
 logs/**
 !logs/**/
@@ -49,6 +50,7 @@ logs/**
 !outputs/**/log.txt
 !outputs/**/*_log.txt
 !outputs/**/*.txt
+!outputs/**/run_metadata.json
 !outputs/**/conversion_summary.json
 !logs/**/*.log
 !logs/**/*.txt

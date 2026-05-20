@@ -756,6 +756,25 @@ def write_log(args, stats, filename="log.txt"):
         f.write(json.dumps(stats, ensure_ascii=False) + "\n")
 
 
+def write_run_metadata(args, model, teacher_model=None):
+    if not is_main_process():
+        return
+    target = unwrap_model(model)
+    teacher = unwrap_model(teacher_model) if teacher_model is not None else None
+    metadata = {
+        "args": vars(args),
+        "model_class": target.__class__.__name__,
+        "teacher_class": teacher.__class__.__name__ if teacher is not None else None,
+        "spike_patch": bool(getattr(target, "spike_patch", False)),
+        "spike_block_indices": list(getattr(target, "spike_block_indices", [])),
+        "snn_timesteps": getattr(target, "snn_timesteps", None),
+        "signed_spikes": getattr(target, "signed_spikes", None),
+    }
+    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+    with open(Path(args.output_dir) / "run_metadata.json", "w", encoding="utf-8") as f:
+        json.dump(metadata, f, ensure_ascii=False, indent=2, sort_keys=True)
+
+
 def run(args):
     if args.fused_ce_loss_weight <= 0 and args.view_ce_loss_weight <= 0:
         raise ValueError("At least one of fused_ce_loss_weight or view_ce_loss_weight must be > 0.")
@@ -831,6 +850,7 @@ def run(args):
         load_pretrained(model, args.finetune, args.model_key, args.min_pretrained_load_ratio)
     model.to(device)
     teacher_model = None if args.eval else build_teacher(args, device)
+    write_run_metadata(args, model, teacher_model)
     if args.distributed:
         ddp_kwargs = {}
         if device.type == "cuda":

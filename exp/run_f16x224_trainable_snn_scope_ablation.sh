@@ -64,6 +64,12 @@ run_scope_job() {
                         job_name="videomamba_small_trainable_snn_b0-11_t${SNN_TIMESTEPS}_from_b0-7"
                         output_dir="${PROJECT_DIR}/outputs/${job_name}"
                         ;;
+                block0to11_from_block0123)
+                        model_path="${BLOCK0TO3_CHECKPOINT}"
+                        block_indices="0,1,2,3,4,5,6,7,8,9,10,11"
+                        job_name="videomamba_small_trainable_snn_b0-11_t${SNN_TIMESTEPS}_from_b0-3"
+                        output_dir="${PROJECT_DIR}/outputs/${job_name}"
+                        ;;
                 block0to23_from_block0to11)
                         model_path="${BLOCK0TO11_CHECKPOINT}"
                         block_indices="0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23"
@@ -85,6 +91,7 @@ run_scope_job() {
                         echo "  block0to7_from_block01" >&2
                         echo "  block0to7_from_block0123" >&2
                         echo "  block0to11_from_block0to7" >&2
+                        echo "  block0to11_from_block0123" >&2
                         echo "  block0to23_from_block0to11" >&2
                         echo "  patch_block01_from_block01" >&2
                         exit 1

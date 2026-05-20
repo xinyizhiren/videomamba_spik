@@ -249,3 +249,45 @@ Optional high-spike probe that also spikes the patch embedding:
 ```bash
 ABLATION_JOBS=patch_block01_from_block01 bash exp/run_f16x224_trainable_snn_scope_ablation.sh
 ```
+
+## 2026-05-20 Trainable `block0..3, T=4` Result
+
+Log path:
+
+```text
+outputs/videomamba_small_trainable_snn_b0-3_t4_from_b0-1/log.txt
+```
+
+Script mapping confirms this run uses the trainable SNN model:
+
+- job: `block0123_from_block01`
+- model: `videomamba_small_trainable_snn`
+- init checkpoint: `outputs/videomamba_small_trainable_snn_b0-1_t4_from_b0/best.pth`
+- `SNN_BLOCK_INDICES=0,1,2,3`
+- `SNN_SPIKE_PATCH=0`
+- `SNN_TIMESTEPS=4`
+
+Result:
+
+| run | blocks | T | init | epoch | train_acc1 | val_acc1 | val_loss |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `videomamba_small_trainable_snn_b0-3_t4_from_b0-1` | `0,1,2,3` | 4 | `block0,1 best` | 0 | 99.7890 | 94.8529 | 0.1952 |
+| `videomamba_small_trainable_snn_b0-3_t4_from_b0-1` | `0,1,2,3` | 4 | `block0,1 best` | 1 | 99.7890 | 90.4412 | 0.2955 |
+
+Interpretation:
+
+- The `0..3` trainable SNN is valid and strong: epoch 0 reaches `94.8529`, matching the best `block0` result.
+- This supports a bolder expansion beyond `0..3`.
+- Because epoch 1 drops, keep the scout setting conservative (`LR=2e-5`, `DISTILL_WEIGHT=0.7`) and compare best checkpoints.
+
+Recommended next step from this result:
+
+```bash
+ABLATION_JOBS=block0to7_from_block0123 bash exp/run_f16x224_trainable_snn_scope_ablation.sh
+```
+
+If we want to skip directly toward higher spike coverage:
+
+```bash
+ABLATION_JOBS=block0to11_from_block0123 bash exp/run_f16x224_trainable_snn_scope_ablation.sh
+```
