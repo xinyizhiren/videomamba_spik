@@ -151,3 +151,15 @@ Interpretation:
 - The result is far above the post-training `block0` SNN accuracy of `74.2647`.
 - Validation loss decreased across the smoke run, so the spike-inserted model can still optimize after ANN initialization.
 - Next step: run the full `block0, T=4` training with the default launcher.
+
+## 2026-05-20 Full Run Memory Note
+
+The first full `block0, T=4` attempt with `BATCH_SIZE=2` hit a backward-time cuDNN initialization error. This is likely a memory/workspace pressure issue because trainable SNN keeps graphs for both views across multiple timesteps.
+
+Launcher defaults were adjusted for the trainable SNN path:
+
+- `BATCH_SIZE=1`
+- `UPDATE_FREQ=2`
+- `CUDNN_BENCHMARK=0`
+
+This keeps the effective batch size close to the original setting while reducing peak activation memory.

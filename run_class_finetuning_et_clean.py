@@ -128,6 +128,7 @@ def get_args():
     parser.add_argument("--num_workers", default=4, type=int)
     parser.add_argument("--pin_mem", action="store_true", default=True)
     parser.add_argument("--no_pin_mem", action="store_false", dest="pin_mem")
+    parser.add_argument("--disable_cudnn_benchmark", action="store_true", default=False)
 
     parser.add_argument("--batch_size", default=6, type=int)
     parser.add_argument("--epochs", default=80, type=int)
@@ -764,7 +765,7 @@ def run(args):
         device = torch.device("cuda", args.local_rank)
     else:
         device = torch.device(args.device if torch.cuda.is_available() else "cpu")
-    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.benchmark = not args.disable_cudnn_benchmark
 
     main_print("Clean ET training configuration:")
     for key in sorted(vars(args)):
