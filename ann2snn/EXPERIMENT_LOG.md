@@ -314,3 +314,23 @@ To make future logs easier to audit, training now prints active spike modules an
 - `spike_block_indices`
 - `spike_patch`
 - `snn_timesteps`
+
+## 2026-05-20 Initial Validation Update
+
+Training now evaluates the validation set once before the first optimization step.
+
+The pre-training row is appended to `log.txt` with:
+
+- `mode: initial_eval`
+- `epoch: start_epoch - 1`
+- `checkpoint: resume or finetune checkpoint`
+- validation metrics only
+
+This makes each scope expansion easier to audit:
+
+- initial validation shows the immediate effect of adding the new spike layers;
+- epoch validation shows what training did after that.
+
+For trainable SNN runs, spike thresholds are initialized from one training batch before this initial validation, so the validation set is not used for threshold calibration.
+
+Use `--skip_initial_eval` only when intentionally skipping this extra validation pass.

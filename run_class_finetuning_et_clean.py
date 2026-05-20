@@ -162,6 +162,7 @@ def get_args():
     parser.add_argument("--eval", action="store_true", help="Run evaluation only.")
     parser.add_argument("--eval_split", default="test", choices=("validation", "test"))
     parser.add_argument("--eval_checkpoint", default="", help="Checkpoint path for eval-only mode.")
+    parser.add_argument("--skip_initial_eval", action="store_true", default=False)
 
     parser.add_argument("--input_size", default=224, type=int)
     parser.add_argument("--short_side_size", default=224, type=int)
@@ -767,6 +768,25 @@ def validate(model, loader, criterion, device, args):
     return reduce_metrics(totals, hists, device, "val")
 
 
+@torch.no_grad()
+def initialize_spikes_from_train_batch(model, loader, device, args):
+    if not active_spike_module_names(model):
+        return
+    was_training = model.training
+    model.eval()
+    try:
+        batch = next(iter(loader))
+    except StopIteration:
+        return
+    view1, view2, _ = move_train_batch(batch, device)
+    with amp_context(device, args):
+        reset_stateful_modules(model)
+        _ = forward_train_logits(model, view1, view2)
+        reset_stateful_modules(model)
+    model.train(was_training)
+    main_print("Initialized spike thresholds from one training batch before initial validation.")
+
+
 def write_log(args, stats, filename="log.txt"):
     if not is_main_process():
         return
@@ -913,6 +933,27 @@ def run(args):
         args.start_epoch, best_acc1 = load_resume(model, optimizer, scheduler, args.resume, device)
     else:
         best_acc1 = 0.0
+
+    if not args.skip_initial_eval:
+        initialize_spikes_from_train_batch(model, train_loader, device, args)
+        initial_val_stats = validate(model, val_loader, criterion, device, args)
+        initial_stats = {
+            "mode": "initial_eval",
+            "epoch": args.start_epoch - 1,
+            "lr": optimizer.param_groups[0]["lr"],
+            "checkpoint": args.resume or args.finetune,
+            **initial_val_stats,
+        }
+        write_log(args, initial_stats)
+        main_print(
+            f"Initial validation before training: "
+            f"val_acc1={initial_stats['val_acc1']:.2f} "
+            f"val_acc5={initial_stats['val_acc5']:.2f} "
+            f"val_loss={initial_stats['val_loss']:.4f}"
+        )
+        if initial_stats["val_acc1"] >= best_acc1:
+            best_acc1 = initial_stats["val_acc1"]
+            save_checkpoint(args, model, optimizer, scheduler, args.start_epoch - 1, best_acc1, "best")
 
     for epoch in range(args.start_epoch, args.epochs):
         if train_sampler is not None:
