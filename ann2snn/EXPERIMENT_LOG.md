@@ -128,3 +128,26 @@ First full run:
 ```bash
 bash exp/run_f16x224_trainable_snn.sh
 ```
+
+## 2026-05-20 Trainable SNN Smoke Result
+
+Command:
+
+```bash
+DEBUG_OVERFIT_SAMPLES=48 EPOCHS=3 BATCH_SIZE=1 SNN_TIMESTEPS=2 bash exp/run_f16x224_trainable_snn.sh
+```
+
+Result:
+
+| run | blocks | T | train samples | epoch | train_acc1 | val_acc1 | val_loss |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `videomamba_small_trainable_snn_b0_t2` | `0` | 2 | 48 | 0 | 100.00 | 92.6471 | 0.3122 |
+| `videomamba_small_trainable_snn_b0_t2` | `0` | 2 | 48 | 1 | 100.00 | 92.6471 | 0.3030 |
+| `videomamba_small_trainable_snn_b0_t2` | `0` | 2 | 48 | 2 | 100.00 | 92.6471 | 0.2923 |
+
+Interpretation:
+
+- The trainable SNN path is working.
+- The result is far above the post-training `block0` SNN accuracy of `74.2647`.
+- Validation loss decreased across the smoke run, so the spike-inserted model can still optimize after ANN initialization.
+- Next step: run the full `block0, T=4` training with the default launcher.
