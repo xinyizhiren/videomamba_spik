@@ -69,31 +69,6 @@ if [ ! -f "${MODEL_PATH}" ]; then
         exit 1
 fi
 
-TRAIN_FLIP_ARGS=()
-if [ "${DISABLE_TRAIN_FLIP}" != "0" ]; then
-        TRAIN_FLIP_ARGS=(--disable_train_flip)
-fi
-
-OVERFIT_ARGS=()
-if [ "${DEBUG_OVERFIT_SAMPLES}" != "0" ]; then
-        OVERFIT_ARGS=(--debug_overfit_samples "${DEBUG_OVERFIT_SAMPLES}")
-fi
-
-SNN_PATCH_ARGS=()
-if [ "${SNN_SPIKE_PATCH}" != "0" ]; then
-        SNN_PATCH_ARGS=(--snn_spike_patch)
-fi
-
-SNN_SIGN_ARGS=()
-if [ "${SNN_SIGNED_SPIKES}" = "0" ]; then
-        SNN_SIGN_ARGS=(--snn_unsigned_spikes)
-fi
-
-SNN_THRESHOLD_ARGS=()
-if [ "${SNN_TRAIN_THRESHOLD}" = "0" ]; then
-        SNN_THRESHOLD_ARGS=(--snn_fixed_threshold)
-fi
-
 RUN_CMD=(python)
 if [ "${NPROC_PER_NODE}" -gt 1 ] || [ "${NNODES}" -gt 1 ]; then
         RUN_CMD=(
@@ -114,7 +89,9 @@ echo "SNN_BLOCK_INDICES=${SNN_BLOCK_INDICES}"
 echo "SNN_TIMESTEPS=${SNN_TIMESTEPS}"
 echo "DISTILL_WEIGHT=${DISTILL_WEIGHT}"
 
-"${RUN_CMD[@]}" "${PROJECT_DIR}/run_class_finetuning_et_clean.py" \
+CMD=(
+        "${RUN_CMD[@]}"
+        "${PROJECT_DIR}/run_class_finetuning_et_clean.py"
         --model "${MODEL_NAME}" \
         --finetune "${MODEL_PATH}" \
         --teacher_checkpoint "${TEACHER_CHECKPOINT}" \
@@ -155,9 +132,27 @@ echo "DISTILL_WEIGHT=${DISTILL_WEIGHT}"
         --train_crop_min_ratio "${TRAIN_CROP_MIN_RATIO}" \
         --train_crop_max_ratio "${TRAIN_CROP_MAX_RATIO}" \
         --print_freq "${PRINT_FREQ}" \
-        --bf16 \
-        "${SNN_PATCH_ARGS[@]}" \
-        "${SNN_SIGN_ARGS[@]}" \
-        "${SNN_THRESHOLD_ARGS[@]}" \
-        "${TRAIN_FLIP_ARGS[@]}" \
-        "${OVERFIT_ARGS[@]}"
+        --bf16
+)
+
+if [ "${SNN_SPIKE_PATCH}" != "0" ]; then
+        CMD+=(--snn_spike_patch)
+fi
+
+if [ "${SNN_SIGNED_SPIKES}" = "0" ]; then
+        CMD+=(--snn_unsigned_spikes)
+fi
+
+if [ "${SNN_TRAIN_THRESHOLD}" = "0" ]; then
+        CMD+=(--snn_fixed_threshold)
+fi
+
+if [ "${DISABLE_TRAIN_FLIP}" != "0" ]; then
+        CMD+=(--disable_train_flip)
+fi
+
+if [ "${DEBUG_OVERFIT_SAMPLES}" != "0" ]; then
+        CMD+=(--debug_overfit_samples "${DEBUG_OVERFIT_SAMPLES}")
+fi
+
+"${CMD[@]}"
