@@ -1,0 +1,218 @@
+{
+  "block_spikes.0": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.3606451153755188,
+    "zero_fraction": 0.6393548846244812,
+    "nonzero_fraction": 0.3606451153755188,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.1": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.22312402725219727,
+    "zero_fraction": 0.776875913143158,
+    "nonzero_fraction": 0.22312402725219727,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.2": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.31671464443206787,
+    "zero_fraction": 0.6832853555679321,
+    "nonzero_fraction": 0.31671464443206787,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.3": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.23827502131462097,
+    "zero_fraction": 0.7617249488830566,
+    "nonzero_fraction": 0.23827502131462097,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.4": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.2956189811229706,
+    "zero_fraction": 0.704380989074707,
+    "nonzero_fraction": 0.2956189811229706,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.5": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.14717982709407806,
+    "zero_fraction": 0.8528201580047607,
+    "nonzero_fraction": 0.14717982709407806,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.6": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.09630186855792999,
+    "zero_fraction": 0.9036980867385864,
+    "nonzero_fraction": 0.09630186855792999,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.7": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.11689113825559616,
+    "zero_fraction": 0.8831088542938232,
+    "nonzero_fraction": 0.11689113825559616,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.8": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.1183604896068573,
+    "zero_fraction": 0.8816394805908203,
+    "nonzero_fraction": 0.1183604896068573,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.9": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.17495815455913544,
+    "zero_fraction": 0.8250418305397034,
+    "nonzero_fraction": 0.17495815455913544,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.10": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.1799033284187317,
+    "zero_fraction": 0.8200966119766235,
+    "nonzero_fraction": 0.1799033284187317,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.11": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.17348796129226685,
+    "zero_fraction": 0.8265119791030884,
+    "nonzero_fraction": 0.17348796129226685,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  }
+}
