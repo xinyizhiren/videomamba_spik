@@ -525,3 +525,36 @@ For multi-GPU training:
 ```bash
 CUDA_VISIBLE_DEVICES=0,1 NPROC_PER_NODE=2 bash exp/run_f16x224_lif_snn_b0-2_train.sh
 ```
+
+## 2026-05-21 Next Unsigned LIF Scope
+
+Latest uploaded unsigned LIF `0..2` training:
+
+- run: `outputs/videomamba_small_lif_unsigned_snn_b0-1-2_t4_from_ann`;
+- `SNN_SPIKE_LAYER=lif`;
+- `SNN_SIGNED_SPIKES=0`;
+- spike stats confirm `{0, 1}` outputs;
+- initial validation: `52.2059`;
+- best uploaded validation so far: `91.1765` at epochs `2` and `4`;
+- uploaded log currently includes epochs `0..4`.
+
+Next staged target: expand to blocks `0..5`, initialized from the trained `0..2` checkpoint:
+
+```bash
+git pull origin main
+bash exp/run_f16x224_lif_snn_b0-5_from_b0-2_train.sh
+```
+
+Default settings:
+
+- `MODEL_PATH=outputs/videomamba_small_lif_unsigned_snn_b0-1-2_t4_from_ann/best.pth`;
+- `TEACHER_CHECKPOINT=outputs/videomamba_small_cv_train12_test3_ann_clean_full/best.pth`;
+- `SNN_BLOCK_INDICES=0,1,2,3,4,5`;
+- `SNN_SPIKE_LAYER=lif`;
+- `SNN_SIGNED_SPIKES=0`;
+- `SNN_TIMESTEPS=4`;
+- `LR=1e-5`;
+- `DISTILL_WEIGHT=0.7`;
+- `EPOCHS=30`.
+
+This is deliberately more conservative than jumping straight to `0..7` or `0..23`, because the no-train LIF sweep collapses quickly after 3-4 blocks. If `0..5` recovers above about `88-90`, continue to `0..7` or `0..11`.
