@@ -2,6 +2,7 @@
 
 更新时间：2026-05-21
 
+
 ## 1. 基线结果
 
 当前所有 SNN 实验都基于 clean VideoMamba ANN 预训练模型：
@@ -183,13 +184,14 @@ SNN_TIMESTEPS=4
 | `b0-2_from_ann` | ANN | `0,1,2` | 52.2059 | 91.1765 | 2 / 4 | 91.1765 | 0..4 |
 | `b0-5_from_b0-2` | `b0-2` | `0..5` | 59.5588 | 88.9706 | 8 | 88.9706 | 0..8 |
 | `b0-11_from_b0-5` | `b0-5` | `0..11` | 38.9706 | 78.6765 | 2 | 78.6765 | 0..2 |
-| `b0-23_from_b0-11` | `b0-11` | `0..23` | pending | pending | pending | pending | script ready, not run/uploaded yet |
+| `b0-23_from_b0-11` | `b0-11` | `0..23` | 25.7353 | 83.0882 | 3 | 81.6176 | 0..5 |
 
 对应输出目录：
 
 - `outputs/videomamba_small_lif_unsigned_snn_b0-1-2_t4_from_ann`
 - `outputs/videomamba_small_lif_unsigned_snn_b0-1-2-3-4-5_t4_from_b0-2`
 - `outputs/videomamba_small_lif_unsigned_snn_b0-1-2-3-4-5-6-7-8-9-10-11_t4_from_b0-5`
+- `outputs/videomamba_small_lif_unsigned_snn_b0-1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-16-17-18-19-20-21-22-23_t4_from_b0-11`
 
 ### 4.4 spike 输出确认
 
@@ -214,6 +216,13 @@ SNN_TIMESTEPS=4
 | `block_spikes.4` | 0.2563 | `[0.0, 1.0]` |
 | `block_spikes.5` | 0.0923 | `[0.0, 1.0]` |
 
+`b0-23_from_b0-11`：
+
+- 24 个 active spike layers 全部输出 `{0,1}`。
+- nonzero fraction 范围：`0.1383` 到 `0.4732`。
+- 平均 nonzero fraction：`0.2918`。
+- best uploaded validation acc1: `83.0882` at epoch `3`。
+
 ## 5. 当前结论
 
 1. 直接 ANN2SNN 转换失败。
@@ -224,10 +233,10 @@ SNN_TIMESTEPS=4
 
 3. SpikingJelly unsigned LIF 是当前更合适的主线。
    它输出严格 `{0,1}`，虽然掉点更大，但通过分阶段训练可以恢复：
-   `0..2` 到 `91.1765`，`0..5` 到 `88.9706`，`0..11` 已从 `38.9706` 恢复到 `78.6765`。
+   `0..2` 到 `91.1765`，`0..5` 到 `88.9706`，`0..11` 已从 `38.9706` 恢复到 `78.6765`，`0..23` 已从 `25.7353` 恢复到 `83.0882`。
 
 4. 下一步重点。
-   继续观察 `0..11` 是否能恢复到 `85+`；如果可以，再运行 full `0..23`：
+   继续观察 full `0..23` 是否能在更长训练中恢复到 `85+` 或 `88+`。当前可继续同一输出目录训练，或以 full `0..23` 的 best checkpoint 为起点降低学习率微调。
 
 ```bash
 bash exp/run_f16x224_lif_snn_b0-23_from_b0-11_train.sh
