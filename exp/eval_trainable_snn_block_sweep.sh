@@ -13,6 +13,10 @@ MAX_BLOCKS="${MAX_BLOCKS:-24}"
 SNN_TIMESTEPS="${SNN_TIMESTEPS:-4}"
 SNN_SPIKE_POSITION="${SNN_SPIKE_POSITION:-post}"
 SNN_SPIKE_PATCH="${SNN_SPIKE_PATCH:-0}"
+SWEEP_EPOCHS="${SWEEP_EPOCHS:-0}"
+SWEEP_DISTILL_WEIGHT="${SWEEP_DISTILL_WEIGHT:-0}"
+SWEEP_DUMP_MODEL_SUMMARY="${SWEEP_DUMP_MODEL_SUMMARY:-0}"
+SWEEP_SKIP_INITIAL_BEST_CHECKPOINT="${SWEEP_SKIP_INITIAL_BEST_CHECKPOINT:-1}"
 SWEEP_TAG="${SWEEP_TAG:-$(date +%Y%m%d_%H%M%S)}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-${PROJECT_DIR}/outputs/trainable_snn_block_sweep_${SWEEP_TAG}}"
 SUMMARY_TXT="${OUTPUT_ROOT}/block_sweep_summary.txt"
@@ -32,9 +36,13 @@ mkdir -p "${OUTPUT_ROOT}"
         echo "- snn_timesteps: ${SNN_TIMESTEPS}"
         echo "- spike_position: ${SNN_SPIKE_POSITION}"
         echo "- spike_patch: ${SNN_SPIKE_PATCH}"
+        echo "- epochs per run: ${SWEEP_EPOCHS}"
+        echo "- distill_weight: ${SWEEP_DISTILL_WEIGHT}"
+        echo "- nproc_per_node: ${NPROC_PER_NODE:-1}"
+        echo "- cuda_visible_devices: ${CUDA_VISIBLE_DEVICES:-2}"
         echo
-        echo "| blocks | indices | spike_position | patch | val_acc1 | val_acc5 | val_loss | output_dir |"
-        echo "| --- | --- | --- | --- | --- | --- | --- | --- |"
+        echo "| blocks | indices | spike_position | patch | initial_acc1 | final_acc1 | best_acc1 | best_epoch | final_loss | output_dir |"
+        echo "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
 } > "${SUMMARY_TXT}"
 
 for block_count in $(seq "${MIN_BLOCKS}" "${MAX_BLOCKS}"); do
@@ -54,10 +62,10 @@ for block_count in $(seq "${MIN_BLOCKS}" "${MAX_BLOCKS}"); do
         SNN_SPIKE_POSITION="${SNN_SPIKE_POSITION}" \
         SNN_SPIKE_PATCH="${SNN_SPIKE_PATCH}" \
         SNN_TIMESTEPS="${SNN_TIMESTEPS}" \
-        EPOCHS=0 \
-        DISTILL_WEIGHT=0 \
-        DUMP_MODEL_SUMMARY=0 \
-        SKIP_INITIAL_BEST_CHECKPOINT=1 \
+        EPOCHS="${SWEEP_EPOCHS}" \
+        DISTILL_WEIGHT="${SWEEP_DISTILL_WEIGHT}" \
+        DUMP_MODEL_SUMMARY="${SWEEP_DUMP_MODEL_SUMMARY}" \
+        SKIP_INITIAL_BEST_CHECKPOINT="${SWEEP_SKIP_INITIAL_BEST_CHECKPOINT}" \
         bash "${BASE_LAUNCHER}"
 
         python - "${output_dir}/log.txt" "${SUMMARY_TXT}" "${block_count}" "${block_indices}" "${SNN_SPIKE_POSITION}" "${SNN_SPIKE_PATCH}" "${output_dir}" <<'PY'
@@ -81,12 +89,26 @@ for line in log_path.read_text(encoding="utf-8").splitlines():
 initial_rows = [row for row in rows if row.get("mode") == "initial_eval"]
 if not initial_rows:
     raise SystemExit(f"No initial_eval row found in {log_path}")
-row = initial_rows[-1]
+initial = initial_rows[-1]
+epoch_rows = [
+    row
+    for row in rows
+    if row.get("mode") is None and "epoch" in row and "val_acc1" in row
+]
+if epoch_rows:
+    final = epoch_rows[-1]
+    best = max(epoch_rows, key=lambda row: row["val_acc1"])
+else:
+    final = initial
+    best = initial
+
+best_epoch = best.get("epoch", -1)
 
 with summary_path.open("a", encoding="utf-8") as handle:
     handle.write(
         f"| {block_count} | `{block_indices}` | `{spike_position}` | {spike_patch} | "
-        f"{row['val_acc1']:.4f} | {row['val_acc5']:.4f} | {row['val_loss']:.4f} | `{output_dir}` |\n"
+        f"{initial['val_acc1']:.4f} | {final['val_acc1']:.4f} | {best['val_acc1']:.4f} | "
+        f"{best_epoch} | {final['val_loss']:.4f} | `{output_dir}` |\n"
     )
 PY
 done

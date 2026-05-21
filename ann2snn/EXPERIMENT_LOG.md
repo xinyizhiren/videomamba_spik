@@ -392,3 +392,47 @@ Current insertion semantics:
 - `SNN_SPIKE_POSITION=prepost` spikes both before and after each selected Mamba block.
 - Mamba blocks themselves are not modified.
 - `SNN_SPIKE_PATCH=1` additionally spikes the patch-embedding output.
+
+## 2026-05-21 Latest Sweep Reading and One-Epoch DDP Follow-Up
+
+Latest uploaded no-train sweep:
+
+- summary: `outputs/trainable_snn_block_sweep_20260521_124014/block_sweep_summary.txt`;
+- checkpoint: ANN clean `outputs/videomamba_small_cv_train12_test3_ann_clean_full/best.pth`;
+- `SNN_TIMESTEPS=4`;
+- `SNN_SPIKE_POSITION=post`;
+- `SNN_SPIKE_PATCH=0`;
+- no training, so every row is the immediate validation accuracy after inserting spike layers.
+
+This explains why the sweep is much lower than the staged training results. The earlier strong all-block run was initialized from the trained `0..3` SNN checkpoint, not directly from the ANN checkpoint.
+
+Current staged all-block result:
+
+- run: `outputs/videomamba_small_trainable_snn_b0-23_t4_from_b0-3`;
+- active spike modules: `block_spikes.0` through `block_spikes.23`;
+- initial validation: `90.4412`;
+- best validation: `96.3235` at epoch `17`;
+- final epoch `49`: `94.1176`.
+
+The block-sweep launcher now supports optional training and records initial/final/best validation accuracy:
+
+```bash
+SWEEP_EPOCHS=1 \
+SWEEP_DISTILL_WEIGHT=0.7 \
+NPROC_PER_NODE=2 \
+CUDA_VISIBLE_DEVICES=0,1 \
+bash exp/eval_trainable_snn_block_sweep.sh
+```
+
+Convenience DDP launcher:
+
+```bash
+bash exp/train_trainable_snn_block_sweep_one_epoch_ddp.sh
+```
+
+Useful overrides:
+
+```bash
+MIN_BLOCKS=24 MAX_BLOCKS=24 bash exp/train_trainable_snn_block_sweep_one_epoch_ddp.sh
+MODEL_PATH=outputs/videomamba_small_trainable_snn_b0-3_t4_from_b0-1/best.pth bash exp/train_trainable_snn_block_sweep_one_epoch_ddp.sh
+```
