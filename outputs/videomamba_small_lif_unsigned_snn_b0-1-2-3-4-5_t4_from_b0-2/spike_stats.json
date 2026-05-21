@@ -1,0 +1,110 @@
+{
+  "block_spikes.0": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.32313746213912964,
+    "zero_fraction": 0.6768624782562256,
+    "nonzero_fraction": 0.32313746213912964,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.1": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.17080825567245483,
+    "zero_fraction": 0.8291917443275452,
+    "nonzero_fraction": 0.17080825567245483,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.2": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.2683744430541992,
+    "zero_fraction": 0.7316255569458008,
+    "nonzero_fraction": 0.2683744430541992,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.3": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.19328196346759796,
+    "zero_fraction": 0.8067179918289185,
+    "nonzero_fraction": 0.19328196346759796,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.4": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.2563464641571045,
+    "zero_fraction": 0.7436535358428955,
+    "nonzero_fraction": 0.2563464641571045,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.5": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.0923420712351799,
+    "zero_fraction": 0.9076579213142395,
+    "nonzero_fraction": 0.0923420712351799,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  }
+}
