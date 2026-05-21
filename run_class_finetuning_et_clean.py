@@ -163,6 +163,7 @@ def get_args():
     parser.add_argument("--eval_split", default="test", choices=("validation", "test"))
     parser.add_argument("--eval_checkpoint", default="", help="Checkpoint path for eval-only mode.")
     parser.add_argument("--skip_initial_eval", action="store_true", default=False)
+    parser.add_argument("--skip_initial_best_checkpoint", action="store_true", default=False)
     parser.add_argument("--dump_model_summary", action="store_true", default=False)
     parser.add_argument("--summary_depth", default=5, type=int)
 
@@ -182,6 +183,7 @@ def get_args():
     parser.add_argument("--no_spik_bimamba", action="store_false", dest="spik_bimamba")
     parser.add_argument("--snn_block_indices", default="0")
     parser.add_argument("--snn_spike_patch", action="store_true", default=False)
+    parser.add_argument("--snn_spike_position", default="post", choices=("pre", "post", "prepost"))
     parser.add_argument("--snn_unsigned_spikes", action="store_false", dest="snn_signed_spikes")
     parser.add_argument("--snn_timesteps", default=4, type=int)
     parser.add_argument("--snn_threshold_init", default=1.0, type=float)
@@ -339,6 +341,7 @@ def build_model(args):
             use_mean_pooling=args.use_mean_pooling,
             spike_patch=args.snn_spike_patch,
             spike_block_indices=parse_int_tuple(args.snn_block_indices),
+            spike_position=args.snn_spike_position,
             snn_timesteps=args.snn_timesteps,
             signed_spikes=args.snn_signed_spikes,
             threshold_init=args.snn_threshold_init,
@@ -855,6 +858,7 @@ def write_run_metadata(args, model, teacher_model=None):
         "active_spike_modules": active_spike_module_names(target),
         "active_spike_parameter_names": sorted(active_spike_parameter_names(target)),
         "spike_patch": bool(getattr(target, "spike_patch", False)),
+        "spike_position": getattr(target, "spike_position", None),
         "spike_block_indices": list(getattr(target, "spike_block_indices", [])),
         "snn_timesteps": getattr(target, "snn_timesteps", None),
         "signed_spikes": getattr(target, "signed_spikes", None),
@@ -1003,7 +1007,7 @@ def run(args):
             f"val_acc5={initial_stats['val_acc5']:.2f} "
             f"val_loss={initial_stats['val_loss']:.4f}"
         )
-        if initial_stats["val_acc1"] >= best_acc1:
+        if not args.skip_initial_best_checkpoint and initial_stats["val_acc1"] >= best_acc1:
             best_acc1 = initial_stats["val_acc1"]
             save_checkpoint(args, model, optimizer, scheduler, args.start_epoch - 1, best_acc1, "best")
 

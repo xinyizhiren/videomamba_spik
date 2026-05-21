@@ -359,3 +359,36 @@ Model structure output:
 - default launcher sets `DUMP_MODEL_SUMMARY=1`;
 - summary is written to `outputs/<job>/model_summary.txt`;
 - active spike modules are also printed at startup and saved in `run_metadata.json`.
+
+## 2026-05-21 No-Train Block Sweep
+
+Added an automatic validation-only sweep for inserting SN layers after the first `1..24` Mamba blocks:
+
+```bash
+bash exp/eval_trainable_snn_block_sweep.sh
+```
+
+Default behavior:
+
+- uses one fixed checkpoint for all runs: `outputs/videomamba_small_cv_train12_test3_ann_clean_full/best.pth`;
+- evaluates `SNN_BLOCK_INDICES=0`, then `0,1`, then `0,1,2`, ... through `0..23`;
+- runs `EPOCHS=0`, so no training happens;
+- initializes spike thresholds from one training batch before validation;
+- records each validation result in `outputs/trainable_snn_block_sweep_<timestamp>/block_sweep_summary.txt`.
+
+Useful overrides:
+
+```bash
+MODEL_PATH=outputs/videomamba_small_trainable_snn_b0-3_t4_from_b0-1/best.pth \
+SNN_SPIKE_POSITION=prepost \
+SNN_SPIKE_PATCH=1 \
+bash exp/eval_trainable_snn_block_sweep.sh
+```
+
+Current insertion semantics:
+
+- `SNN_SPIKE_POSITION=post` is the original/default mode: spike after each selected Mamba block.
+- `SNN_SPIKE_POSITION=pre` spikes the tensor before each selected Mamba block.
+- `SNN_SPIKE_POSITION=prepost` spikes both before and after each selected Mamba block.
+- Mamba blocks themselves are not modified.
+- `SNN_SPIKE_PATCH=1` additionally spikes the patch-embedding output.

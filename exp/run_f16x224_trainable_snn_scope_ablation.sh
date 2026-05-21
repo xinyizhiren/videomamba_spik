@@ -13,6 +13,7 @@ export LR="${LR:-2e-5}"
 export WARMUP_EPOCHS="${WARMUP_EPOCHS:-1}"
 export DISTILL_WEIGHT="${DISTILL_WEIGHT:-0.7}"
 export CUDNN_BENCHMARK="${CUDNN_BENCHMARK:-0}"
+export SNN_SPIKE_POSITION="${SNN_SPIKE_POSITION:-post}"
 
 ANN_OUTPUT_DIR="${ANN_OUTPUT_DIR:-${PROJECT_DIR}/outputs/videomamba_small_cv_train12_test3_ann_clean_full}"
 ANN_CHECKPOINT="${ANN_CHECKPOINT:-${ANN_OUTPUT_DIR}/best.pth}"
@@ -89,6 +90,13 @@ run_scope_job() {
                         job_name="videomamba_small_trainable_snn_patch_b0-1_t${SNN_TIMESTEPS}_from_b0-1"
                         output_dir="${PROJECT_DIR}/outputs/${job_name}"
                         ;;
+                patch_block0to23_from_block0123)
+                        model_path="${BLOCK0TO3_CHECKPOINT}"
+                        block_indices="0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23"
+                        spike_patch="1"
+                        job_name="videomamba_small_trainable_snn_patch_b0-23_t${SNN_TIMESTEPS}_from_b0-3"
+                        output_dir="${PROJECT_DIR}/outputs/${job_name}"
+                        ;;
                 *)
                         echo "Unknown ABLATION job: ${job}" >&2
                         echo "Supported jobs:" >&2
@@ -101,6 +109,7 @@ run_scope_job() {
                         echo "  block0to23_from_block0to11" >&2
                         echo "  block0to23_from_block0123" >&2
                         echo "  patch_block01_from_block01" >&2
+                        echo "  patch_block0to23_from_block0123" >&2
                         exit 1
                         ;;
         esac
@@ -121,6 +130,7 @@ run_scope_job() {
         echo "MODEL_PATH=${model_path}"
         echo "TEACHER_CHECKPOINT=${ANN_CHECKPOINT}"
         echo "SNN_BLOCK_INDICES=${block_indices}"
+        echo "SNN_SPIKE_POSITION=${SNN_SPIKE_POSITION}"
         echo "SNN_SPIKE_PATCH=${spike_patch}"
         echo "OUTPUT_DIR=${output_dir}"
 

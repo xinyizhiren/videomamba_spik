@@ -126,6 +126,7 @@ class TrainableVideoMambaSNN(CleanVideoMamba):
         *args,
         spike_patch=False,
         spike_block_indices=(0,),
+        spike_position="post",
         snn_timesteps=4,
         signed_spikes=True,
         threshold_init=1.0,
@@ -138,6 +139,9 @@ class TrainableVideoMambaSNN(CleanVideoMamba):
         super().__init__(*args, **kwargs)
         self.spike_patch = bool(spike_patch)
         self.spike_block_indices = tuple(sorted(set(int(x) for x in spike_block_indices)))
+        self.spike_position = str(spike_position).lower()
+        if self.spike_position not in {"pre", "post", "prepost"}:
+            raise ValueError(f"Unsupported spike_position: {spike_position}")
         self.snn_timesteps = int(snn_timesteps)
         self.signed_spikes = bool(signed_spikes)
 
@@ -150,10 +154,18 @@ class TrainableVideoMambaSNN(CleanVideoMamba):
             detach_reset=detach_reset,
         )
         self.patch_spike = TrainableSpike5d(self.embed_dim, **spike_kwargs)
+        self.pre_block_spikes = nn.ModuleDict(
+            OrderedDict(
+                (str(idx), TrainableSpike3dSeq(self.embed_dim, **spike_kwargs))
+                for idx in self.spike_block_indices
+                if self.spike_position in {"pre", "prepost"}
+            )
+        )
         self.block_spikes = nn.ModuleDict(
             OrderedDict(
                 (str(idx), TrainableSpike3dSeq(self.embed_dim, **spike_kwargs))
                 for idx in self.spike_block_indices
+                if self.spike_position in {"post", "prepost"}
             )
         )
 
@@ -161,20 +173,36 @@ class TrainableVideoMambaSNN(CleanVideoMamba):
         if self.spike_patch:
             yield self.patch_spike
         for idx in self.spike_block_indices:
-            yield self.block_spikes[str(idx)]
+            key = str(idx)
+            if key in self.pre_block_spikes:
+                yield self.pre_block_spikes[key]
+        for idx in self.spike_block_indices:
+            key = str(idx)
+            if key in self.block_spikes:
+                yield self.block_spikes[key]
 
     def active_spike_module_names(self):
         names = []
         if self.spike_patch:
             names.append("patch_spike")
-        names.extend(f"block_spikes.{idx}" for idx in self.spike_block_indices)
+        for idx in self.spike_block_indices:
+            key = str(idx)
+            if key in self.pre_block_spikes:
+                names.append(f"pre_block_spikes.{idx}")
+            if key in self.block_spikes:
+                names.append(f"block_spikes.{idx}")
         return names
 
     def active_spike_parameter_names(self):
         names = []
         if self.spike_patch:
             names.append("patch_spike.log_threshold")
-        names.extend(f"block_spikes.{idx}.log_threshold" for idx in self.spike_block_indices)
+        for idx in self.spike_block_indices:
+            key = str(idx)
+            if key in self.pre_block_spikes:
+                names.append(f"pre_block_spikes.{idx}.log_threshold")
+            if key in self.block_spikes:
+                names.append(f"block_spikes.{idx}.log_threshold")
         return names
 
     def reset_spike_state(self):
@@ -200,6 +228,10 @@ class TrainableVideoMambaSNN(CleanVideoMamba):
         residual = None
         hidden_states = x
         for idx, layer in enumerate(self.layers):
+            key = str(idx)
+            if key in self.pre_block_spikes:
+                hidden_states = self.pre_block_spikes[key](hidden_states)
+
             if self.use_checkpoint and idx < self.checkpoint_num:
                 hidden_states, residual = layer(
                     hidden_states,
@@ -214,7 +246,6 @@ class TrainableVideoMambaSNN(CleanVideoMamba):
                     inference_params=inference_params,
                 )
 
-            key = str(idx)
             if key in self.block_spikes:
                 hidden_states = self.block_spikes[key](hidden_states)
 
@@ -262,6 +293,7 @@ def create_videomamba_small_trainable_snn(
     use_mean_pooling=True,
     spike_patch=False,
     spike_block_indices=(0,),
+    spike_position="post",
     snn_timesteps=4,
     signed_spikes=True,
     threshold_init=1.0,
@@ -286,6 +318,7 @@ def create_videomamba_small_trainable_snn(
         use_mean_pooling=use_mean_pooling,
         spike_patch=spike_patch,
         spike_block_indices=spike_block_indices,
+        spike_position=spike_position,
         snn_timesteps=snn_timesteps,
         signed_spikes=signed_spikes,
         threshold_init=threshold_init,
