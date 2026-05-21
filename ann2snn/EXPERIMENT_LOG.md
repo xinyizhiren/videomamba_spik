@@ -591,3 +591,26 @@ Default settings:
 - `EPOCHS=30`.
 
 If this stage recovers above about `85`, continue to `0..17` or directly `0..23`; if it stalls below `80`, try a longer run or lower LR before expanding again.
+
+## 2026-05-21 Full Unsigned LIF Scope
+
+Full 24-block unsigned LIF training entry:
+
+```bash
+git pull origin main
+bash exp/run_f16x224_lif_snn_b0-23_from_b0-11_train.sh
+```
+
+Default settings:
+
+- `MODEL_PATH=outputs/videomamba_small_lif_unsigned_snn_b0-1-2-3-4-5-6-7-8-9-10-11_t4_from_b0-5/best.pth`;
+- `TEACHER_CHECKPOINT=outputs/videomamba_small_cv_train12_test3_ann_clean_full/best.pth`;
+- `SNN_BLOCK_INDICES=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23`;
+- `SNN_SPIKE_LAYER=lif`;
+- `SNN_SIGNED_SPIKES=0`;
+- `SNN_TIMESTEPS=4`;
+- `LR=1e-5`;
+- `DISTILL_WEIGHT=0.7`;
+- `EPOCHS=30`.
+
+This stage should only be run after the 12-block `0..11` checkpoint exists, unless `MODEL_PATH` is overridden manually.
