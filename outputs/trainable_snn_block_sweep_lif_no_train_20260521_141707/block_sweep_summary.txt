@@ -1,0 +1,42 @@
+# Trainable SNN Block Sweep
+
+- checkpoint: /data/users/ouyangys/code/videomamba_spik/outputs/videomamba_small_cv_train12_test3_ann_clean_full/best.pth
+- block range: 1..24
+- snn_timesteps: 4
+- spike_position: post
+- spike_layer: lif
+- spike_patch: 0
+- lif_tau: 2.0
+- lif_backend: torch
+- epochs per run: 0
+- distill_weight: 0
+- dump_spike_stats: 1
+- nproc_per_node: 1
+- cuda_visible_devices: 2
+
+| blocks | indices | spike_position | spike_layer | patch | initial_acc1 | final_acc1 | best_acc1 | best_epoch | final_loss | output_dir |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | `0` | `post` | `lif` | 0 | 91.9118 | 91.9118 | 91.9118 | -1 | 0.2879 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_1_post_lif` |
+| 2 | `0,1` | `post` | `lif` | 0 | 88.9706 | 88.9706 | 88.9706 | -1 | 0.3679 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_2_post_lif` |
+| 3 | `0,1,2` | `post` | `lif` | 0 | 82.3529 | 82.3529 | 82.3529 | -1 | 0.6003 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_3_post_lif` |
+| 4 | `0,1,2,3` | `post` | `lif` | 0 | 72.7941 | 72.7941 | 72.7941 | -1 | 0.9259 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_4_post_lif` |
+| 5 | `0,1,2,3,4` | `post` | `lif` | 0 | 70.5882 | 70.5882 | 70.5882 | -1 | 0.9855 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_5_post_lif` |
+| 6 | `0,1,2,3,4,5` | `post` | `lif` | 0 | 65.4412 | 65.4412 | 65.4412 | -1 | 1.0310 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_6_post_lif` |
+| 7 | `0,1,2,3,4,5,6` | `post` | `lif` | 0 | 60.2941 | 60.2941 | 60.2941 | -1 | 1.2822 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_7_post_lif` |
+| 8 | `0,1,2,3,4,5,6,7` | `post` | `lif` | 0 | 59.5588 | 59.5588 | 59.5588 | -1 | 1.3066 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_8_post_lif` |
+| 9 | `0,1,2,3,4,5,6,7,8` | `post` | `lif` | 0 | 60.2941 | 60.2941 | 60.2941 | -1 | 1.3155 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_9_post_lif` |
+| 10 | `0,1,2,3,4,5,6,7,8,9` | `post` | `lif` | 0 | 44.8529 | 44.8529 | 44.8529 | -1 | 1.7767 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_10_post_lif` |
+| 11 | `0,1,2,3,4,5,6,7,8,9,10` | `post` | `lif` | 0 | 38.2353 | 38.2353 | 38.2353 | -1 | 1.9703 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_11_post_lif` |
+| 12 | `0,1,2,3,4,5,6,7,8,9,10,11` | `post` | `lif` | 0 | 45.5882 | 45.5882 | 45.5882 | -1 | 1.7900 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_12_post_lif` |
+| 13 | `0,1,2,3,4,5,6,7,8,9,10,11,12` | `post` | `lif` | 0 | 38.9706 | 38.9706 | 38.9706 | -1 | 1.9494 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_13_post_lif` |
+| 14 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13` | `post` | `lif` | 0 | 46.3235 | 46.3235 | 46.3235 | -1 | 1.7696 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_14_post_lif` |
+| 15 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14` | `post` | `lif` | 0 | 51.4706 | 51.4706 | 51.4706 | -1 | 1.6500 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_15_post_lif` |
+| 16 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15` | `post` | `lif` | 0 | 36.0294 | 36.0294 | 36.0294 | -1 | 1.9809 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_16_post_lif` |
+| 17 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16` | `post` | `lif` | 0 | 36.0294 | 36.0294 | 36.0294 | -1 | 1.9629 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_17_post_lif` |
+| 18 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17` | `post` | `lif` | 0 | 36.7647 | 36.7647 | 36.7647 | -1 | 2.0496 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_18_post_lif` |
+| 19 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18` | `post` | `lif` | 0 | 40.4412 | 40.4412 | 40.4412 | -1 | 2.0037 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_19_post_lif` |
+| 20 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19` | `post` | `lif` | 0 | 37.5000 | 37.5000 | 37.5000 | -1 | 1.9402 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_20_post_lif` |
+| 21 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20` | `post` | `lif` | 0 | 30.1471 | 30.1471 | 30.1471 | -1 | 2.0450 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_21_post_lif` |
+| 22 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21` | `post` | `lif` | 0 | 30.8824 | 30.8824 | 30.8824 | -1 | 2.1846 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_22_post_lif` |
+| 23 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22` | `post` | `lif` | 0 | 22.7941 | 22.7941 | 22.7941 | -1 | 2.2423 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_23_post_lif` |
+| 24 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23` | `post` | `lif` | 0 | 31.6176 | 31.6176 | 31.6176 | -1 | 2.2119 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707/block_count_24_post_lif` |
