@@ -1,0 +1,34 @@
+# Trainable SNN Block Sweep
+
+- checkpoint: /data/users/ouyangys/code/videomamba_spik/outputs/videomamba_small_cv_train12_test3_ann_clean_full/best.pth
+- block range: 1..24
+- snn_timesteps: 4
+- spike_position: post
+- spike_patch: 0
+
+| blocks | indices | spike_position | patch | val_acc1 | val_acc5 | val_loss | output_dir |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | `0` | `post` | 0 | 91.1765 | 99.2647 | 0.3186 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_1_post` |
+| 2 | `0,1` | `post` | 0 | 88.2353 | 99.2647 | 0.3770 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_2_post` |
+| 3 | `0,1,2` | `post` | 0 | 84.5588 | 98.5294 | 0.4669 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_3_post` |
+| 4 | `0,1,2,3` | `post` | 0 | 80.8824 | 98.5294 | 0.5758 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_4_post` |
+| 5 | `0,1,2,3,4` | `post` | 0 | 76.4706 | 97.0588 | 0.7028 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_5_post` |
+| 6 | `0,1,2,3,4,5` | `post` | 0 | 75.0000 | 97.0588 | 0.7759 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_6_post` |
+| 7 | `0,1,2,3,4,5,6` | `post` | 0 | 74.2647 | 97.0588 | 0.8306 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_7_post` |
+| 8 | `0,1,2,3,4,5,6,7` | `post` | 0 | 71.3235 | 98.5294 | 0.8585 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_8_post` |
+| 9 | `0,1,2,3,4,5,6,7,8` | `post` | 0 | 71.3235 | 99.2647 | 0.8702 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_9_post` |
+| 10 | `0,1,2,3,4,5,6,7,8,9` | `post` | 0 | 72.7941 | 99.2647 | 0.8500 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_10_post` |
+| 11 | `0,1,2,3,4,5,6,7,8,9,10` | `post` | 0 | 73.5294 | 99.2647 | 0.8422 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_11_post` |
+| 12 | `0,1,2,3,4,5,6,7,8,9,10,11` | `post` | 0 | 75.7353 | 99.2647 | 0.8418 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_12_post` |
+| 13 | `0,1,2,3,4,5,6,7,8,9,10,11,12` | `post` | 0 | 76.4706 | 99.2647 | 0.8509 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_13_post` |
+| 14 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13` | `post` | 0 | 76.4706 | 99.2647 | 0.8775 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_14_post` |
+| 15 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14` | `post` | 0 | 74.2647 | 97.7941 | 0.9167 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_15_post` |
+| 16 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15` | `post` | 0 | 76.4706 | 97.7941 | 0.9396 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_16_post` |
+| 17 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16` | `post` | 0 | 75.7353 | 97.0588 | 0.9686 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_17_post` |
+| 18 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17` | `post` | 0 | 77.2059 | 97.0588 | 0.9880 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_18_post` |
+| 19 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18` | `post` | 0 | 77.2059 | 97.0588 | 1.0227 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_19_post` |
+| 20 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19` | `post` | 0 | 77.2059 | 97.0588 | 1.0437 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_20_post` |
+| 21 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20` | `post` | 0 | 77.2059 | 97.7941 | 1.0828 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_21_post` |
+| 22 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21` | `post` | 0 | 75.7353 | 97.7941 | 1.1598 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_22_post` |
+| 23 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22` | `post` | 0 | 77.9412 | 97.7941 | 1.2180 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_23_post` |
+| 24 | `0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23` | `post` | 0 | 77.9412 | 98.5294 | 1.3115 | `/data/users/ouyangys/code/videomamba_spik/outputs/trainable_snn_block_sweep_20260521_124014/block_count_24_post` |
