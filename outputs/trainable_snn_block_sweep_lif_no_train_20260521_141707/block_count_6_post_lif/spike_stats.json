@@ -1,0 +1,116 @@
+{
+  "block_spikes.0": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": -1.0,
+    "max": 1.0,
+    "mean": -0.026708273217082024,
+    "zero_fraction": 0.4761607050895691,
+    "nonzero_fraction": 0.5238392949104309,
+    "unique_sample_count": 3,
+    "unique_values_sample": [
+      -1.0,
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.1": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": -1.0,
+    "max": 1.0,
+    "mean": -0.01343922596424818,
+    "zero_fraction": 0.7516328692436218,
+    "nonzero_fraction": 0.2483671009540558,
+    "unique_sample_count": 3,
+    "unique_values_sample": [
+      -1.0,
+      -0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.2": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": -1.0,
+    "max": 1.0,
+    "mean": -0.009318383410573006,
+    "zero_fraction": 0.636559784412384,
+    "nonzero_fraction": 0.36344021558761597,
+    "unique_sample_count": 3,
+    "unique_values_sample": [
+      -1.0,
+      -0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.3": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": -1.0,
+    "max": 1.0,
+    "mean": -0.011794707737863064,
+    "zero_fraction": 0.6779051423072815,
+    "nonzero_fraction": 0.3220948278903961,
+    "unique_sample_count": 3,
+    "unique_values_sample": [
+      -1.0,
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.4": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": -1.0,
+    "max": 1.0,
+    "mean": -0.0027876286767423153,
+    "zero_fraction": 0.5736886858940125,
+    "nonzero_fraction": 0.42631128430366516,
+    "unique_sample_count": 3,
+    "unique_values_sample": [
+      -1.0,
+      -0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.5": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": -1.0,
+    "max": 1.0,
+    "mean": -0.019447820261120796,
+    "zero_fraction": 0.7352590560913086,
+    "nonzero_fraction": 0.26474088430404663,
+    "unique_sample_count": 3,
+    "unique_values_sample": [
+      -1.0,
+      -0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  }
+}

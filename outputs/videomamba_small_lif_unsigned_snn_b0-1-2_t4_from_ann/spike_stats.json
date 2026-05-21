@@ -1,0 +1,56 @@
+{
+  "block_spikes.0": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.24856549501419067,
+    "zero_fraction": 0.7514344453811646,
+    "nonzero_fraction": 0.24856549501419067,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.1": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.11938821524381638,
+    "zero_fraction": 0.880611777305603,
+    "nonzero_fraction": 0.11938821524381638,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  },
+  "block_spikes.2": {
+    "shape": [
+      1,
+      3137,
+      384
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.19715458154678345,
+    "zero_fraction": 0.8028453588485718,
+    "nonzero_fraction": 0.19715458154678345,
+    "unique_sample_count": 2,
+    "unique_values_sample": [
+      0.0,
+      1.0
+    ],
+    "unique_values_note": "complete_for_sample"
+  }
+}
