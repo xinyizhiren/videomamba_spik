@@ -558,3 +558,36 @@ Default settings:
 - `EPOCHS=30`.
 
 This is deliberately more conservative than jumping straight to `0..7` or `0..23`, because the no-train LIF sweep collapses quickly after 3-4 blocks. If `0..5` recovers above about `88-90`, continue to `0..7` or `0..11`.
+
+## 2026-05-21 Next Bold Unsigned LIF Scope
+
+Latest uploaded unsigned LIF `0..5` training:
+
+- run: `outputs/videomamba_small_lif_unsigned_snn_b0-1-2-3-4-5_t4_from_b0-2`;
+- `SNN_SPIKE_LAYER=lif`;
+- `SNN_SIGNED_SPIKES=0`;
+- spike stats confirm `{0, 1}` outputs for all 6 active spike layers;
+- initial validation after expanding from `0..2` to `0..5`: `59.5588`;
+- best uploaded validation so far: `88.9706` at epoch `8`;
+- uploaded log currently includes epochs `0..8`.
+
+Next target: expand directly to 12 spiked Mamba blocks, `0..11`, initialized from the trained `0..5` checkpoint:
+
+```bash
+git pull origin main
+bash exp/run_f16x224_lif_snn_b0-11_from_b0-5_train.sh
+```
+
+Default settings:
+
+- `MODEL_PATH=outputs/videomamba_small_lif_unsigned_snn_b0-1-2-3-4-5_t4_from_b0-2/best.pth`;
+- `TEACHER_CHECKPOINT=outputs/videomamba_small_cv_train12_test3_ann_clean_full/best.pth`;
+- `SNN_BLOCK_INDICES=0,1,2,3,4,5,6,7,8,9,10,11`;
+- `SNN_SPIKE_LAYER=lif`;
+- `SNN_SIGNED_SPIKES=0`;
+- `SNN_TIMESTEPS=4`;
+- `LR=1e-5`;
+- `DISTILL_WEIGHT=0.7`;
+- `EPOCHS=30`.
+
+If this stage recovers above about `85`, continue to `0..17` or directly `0..23`; if it stalls below `80`, try a longer run or lower LR before expanding again.
