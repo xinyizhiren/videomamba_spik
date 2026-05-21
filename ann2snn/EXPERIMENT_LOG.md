@@ -471,3 +471,57 @@ bash exp/eval_trainable_snn_block_sweep.sh
 ```
 
 `eval_trainable_snn_block_sweep_lif.sh` also sets `SWEEP_DUMP_SPIKE_STATS=1`, so each run writes `spike_stats.json`. For signed LIF, spike output should be in `{-1, 0, +1}`; with `SNN_SIGNED_SPIKES=0`, it should be `{0, 1}`.
+
+## 2026-05-21 Selected LIF Training Candidate
+
+Latest no-train LIF sweep:
+
+- run: `outputs/trainable_snn_block_sweep_lif_no_train_20260521_141707`;
+- checkpoint: ANN clean `best.pth`;
+- `SNN_SPIKE_LAYER=lif`;
+- `SNN_SIGNED_SPIKES=1`;
+- `SNN_TIMESTEPS=4`;
+- `SNN_SPIKE_POSITION=post`;
+- `SNN_SPIKE_PATCH=0`.
+
+Key validation accuracy:
+
+- 1 block: `91.9118`;
+- 2 blocks: `88.9706`;
+- 3 blocks: `82.3529`;
+- 4 blocks: `72.7941`;
+- 8 blocks: `59.5588`;
+- 24 blocks: `31.6176`.
+
+Chosen first training target: blocks `0,1,2`.
+
+Rationale: 1-2 blocks are too conservative, while 4+ blocks already collapse sharply without adaptation. Blocks `0,1,2` are a useful first recovery test.
+
+Because signed spike data is not useful for a reparameterization-oriented deployment path, the training launcher defaults to unsigned LIF:
+
+```bash
+git pull origin main
+bash exp/run_f16x224_lif_snn_b0-2_train.sh
+```
+
+Default settings:
+
+- `SNN_SPIKE_LAYER=lif`;
+- `SNN_SIGNED_SPIKES=0`;
+- `SNN_BLOCK_INDICES=0,1,2`;
+- `SNN_TIMESTEPS=4`;
+- `DISTILL_WEIGHT=0.7`;
+- `EPOCHS=30`;
+- `DUMP_SPIKE_STATS=1`.
+
+For a quick initial-validation-only check of the same unsigned candidate:
+
+```bash
+EPOCHS=0 bash exp/run_f16x224_lif_snn_b0-2_train.sh
+```
+
+For multi-GPU training:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1 NPROC_PER_NODE=2 bash exp/run_f16x224_lif_snn_b0-2_train.sh
+```
