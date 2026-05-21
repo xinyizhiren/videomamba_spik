@@ -12,10 +12,14 @@ MIN_BLOCKS="${MIN_BLOCKS:-1}"
 MAX_BLOCKS="${MAX_BLOCKS:-24}"
 SNN_TIMESTEPS="${SNN_TIMESTEPS:-4}"
 SNN_SPIKE_POSITION="${SNN_SPIKE_POSITION:-post}"
+SNN_SPIKE_LAYER="${SNN_SPIKE_LAYER:-trainable}"
 SNN_SPIKE_PATCH="${SNN_SPIKE_PATCH:-0}"
+SNN_LIF_TAU="${SNN_LIF_TAU:-2.0}"
+SNN_LIF_BACKEND="${SNN_LIF_BACKEND:-torch}"
 SWEEP_EPOCHS="${SWEEP_EPOCHS:-0}"
 SWEEP_DISTILL_WEIGHT="${SWEEP_DISTILL_WEIGHT:-0}"
 SWEEP_DUMP_MODEL_SUMMARY="${SWEEP_DUMP_MODEL_SUMMARY:-0}"
+SWEEP_DUMP_SPIKE_STATS="${SWEEP_DUMP_SPIKE_STATS:-0}"
 SWEEP_SKIP_INITIAL_BEST_CHECKPOINT="${SWEEP_SKIP_INITIAL_BEST_CHECKPOINT:-1}"
 SWEEP_TAG="${SWEEP_TAG:-$(date +%Y%m%d_%H%M%S)}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-${PROJECT_DIR}/outputs/trainable_snn_block_sweep_${SWEEP_TAG}}"
@@ -35,20 +39,24 @@ mkdir -p "${OUTPUT_ROOT}"
         echo "- block range: ${MIN_BLOCKS}..${MAX_BLOCKS}"
         echo "- snn_timesteps: ${SNN_TIMESTEPS}"
         echo "- spike_position: ${SNN_SPIKE_POSITION}"
+        echo "- spike_layer: ${SNN_SPIKE_LAYER}"
         echo "- spike_patch: ${SNN_SPIKE_PATCH}"
+        echo "- lif_tau: ${SNN_LIF_TAU}"
+        echo "- lif_backend: ${SNN_LIF_BACKEND}"
         echo "- epochs per run: ${SWEEP_EPOCHS}"
         echo "- distill_weight: ${SWEEP_DISTILL_WEIGHT}"
+        echo "- dump_spike_stats: ${SWEEP_DUMP_SPIKE_STATS}"
         echo "- nproc_per_node: ${NPROC_PER_NODE:-1}"
         echo "- cuda_visible_devices: ${CUDA_VISIBLE_DEVICES:-2}"
         echo
-        echo "| blocks | indices | spike_position | patch | initial_acc1 | final_acc1 | best_acc1 | best_epoch | final_loss | output_dir |"
-        echo "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+        echo "| blocks | indices | spike_position | spike_layer | patch | initial_acc1 | final_acc1 | best_acc1 | best_epoch | final_loss | output_dir |"
+        echo "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
 } > "${SUMMARY_TXT}"
 
 for block_count in $(seq "${MIN_BLOCKS}" "${MAX_BLOCKS}"); do
         last_block=$((block_count - 1))
         block_indices="$(seq -s, 0 "${last_block}")"
-        run_name="block_count_${block_count}_${SNN_SPIKE_POSITION}"
+        run_name="block_count_${block_count}_${SNN_SPIKE_POSITION}_${SNN_SPIKE_LAYER}"
         if [ "${SNN_SPIKE_PATCH}" != "0" ]; then
                 run_name="${run_name}_patch"
         fi
@@ -60,15 +68,19 @@ for block_count in $(seq "${MIN_BLOCKS}" "${MAX_BLOCKS}"); do
         JOB_NAME="${run_name}" \
         SNN_BLOCK_INDICES="${block_indices}" \
         SNN_SPIKE_POSITION="${SNN_SPIKE_POSITION}" \
+        SNN_SPIKE_LAYER="${SNN_SPIKE_LAYER}" \
         SNN_SPIKE_PATCH="${SNN_SPIKE_PATCH}" \
         SNN_TIMESTEPS="${SNN_TIMESTEPS}" \
+        SNN_LIF_TAU="${SNN_LIF_TAU}" \
+        SNN_LIF_BACKEND="${SNN_LIF_BACKEND}" \
         EPOCHS="${SWEEP_EPOCHS}" \
         DISTILL_WEIGHT="${SWEEP_DISTILL_WEIGHT}" \
         DUMP_MODEL_SUMMARY="${SWEEP_DUMP_MODEL_SUMMARY}" \
+        DUMP_SPIKE_STATS="${SWEEP_DUMP_SPIKE_STATS}" \
         SKIP_INITIAL_BEST_CHECKPOINT="${SWEEP_SKIP_INITIAL_BEST_CHECKPOINT}" \
         bash "${BASE_LAUNCHER}"
 
-        python - "${output_dir}/log.txt" "${SUMMARY_TXT}" "${block_count}" "${block_indices}" "${SNN_SPIKE_POSITION}" "${SNN_SPIKE_PATCH}" "${output_dir}" <<'PY'
+        python - "${output_dir}/log.txt" "${SUMMARY_TXT}" "${block_count}" "${block_indices}" "${SNN_SPIKE_POSITION}" "${SNN_SPIKE_LAYER}" "${SNN_SPIKE_PATCH}" "${output_dir}" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -78,8 +90,9 @@ summary_path = Path(sys.argv[2])
 block_count = sys.argv[3]
 block_indices = sys.argv[4]
 spike_position = sys.argv[5]
-spike_patch = sys.argv[6]
-output_dir = sys.argv[7]
+spike_layer = sys.argv[6]
+spike_patch = sys.argv[7]
+output_dir = sys.argv[8]
 
 rows = []
 for line in log_path.read_text(encoding="utf-8").splitlines():
@@ -106,7 +119,7 @@ best_epoch = best.get("epoch", -1)
 
 with summary_path.open("a", encoding="utf-8") as handle:
     handle.write(
-        f"| {block_count} | `{block_indices}` | `{spike_position}` | {spike_patch} | "
+        f"| {block_count} | `{block_indices}` | `{spike_position}` | `{spike_layer}` | {spike_patch} | "
         f"{initial['val_acc1']:.4f} | {final['val_acc1']:.4f} | {best['val_acc1']:.4f} | "
         f"{best_epoch} | {final['val_loss']:.4f} | `{output_dir}` |\n"
     )

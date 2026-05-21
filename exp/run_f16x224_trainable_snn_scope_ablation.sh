@@ -14,6 +14,7 @@ export WARMUP_EPOCHS="${WARMUP_EPOCHS:-1}"
 export DISTILL_WEIGHT="${DISTILL_WEIGHT:-0.7}"
 export CUDNN_BENCHMARK="${CUDNN_BENCHMARK:-0}"
 export SNN_SPIKE_POSITION="${SNN_SPIKE_POSITION:-post}"
+export SNN_SPIKE_LAYER="${SNN_SPIKE_LAYER:-trainable}"
 
 ANN_OUTPUT_DIR="${ANN_OUTPUT_DIR:-${PROJECT_DIR}/outputs/videomamba_small_cv_train12_test3_ann_clean_full}"
 ANN_CHECKPOINT="${ANN_CHECKPOINT:-${ANN_OUTPUT_DIR}/best.pth}"
@@ -131,6 +132,7 @@ run_scope_job() {
         echo "TEACHER_CHECKPOINT=${ANN_CHECKPOINT}"
         echo "SNN_BLOCK_INDICES=${block_indices}"
         echo "SNN_SPIKE_POSITION=${SNN_SPIKE_POSITION}"
+        echo "SNN_SPIKE_LAYER=${SNN_SPIKE_LAYER}"
         echo "SNN_SPIKE_PATCH=${spike_patch}"
         echo "OUTPUT_DIR=${output_dir}"
 

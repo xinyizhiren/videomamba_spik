@@ -436,3 +436,38 @@ Useful overrides:
 MIN_BLOCKS=24 MAX_BLOCKS=24 bash exp/train_trainable_snn_block_sweep_one_epoch_ddp.sh
 MODEL_PATH=outputs/videomamba_small_trainable_snn_b0-3_t4_from_b0-1/best.pth bash exp/train_trainable_snn_block_sweep_one_epoch_ddp.sh
 ```
+
+## 2026-05-21 SpikingJelly MultiStepLIFNode Option
+
+`TrainableSpike3dSeq` is a local custom surrogate spike layer. Its forward value is threshold-scaled spike data:
+
+- signed mode: `{-threshold, 0, +threshold}` per channel;
+- unsigned mode: `{0, threshold}`.
+
+It is therefore spike-like and discrete in the forward pass, but it is not SpikingJelly's standard LIF implementation.
+
+Added a switchable SpikingJelly LIF backend:
+
+- `SNN_SPIKE_LAYER=trainable`: previous custom trainable-threshold spike layer;
+- `SNN_SPIKE_LAYER=lif`: `MultiStepLIFNode(tau=2.0, detach_reset=True, backend='torch')`;
+- import tries `spikingjelly.activation_based.neuron` first, then falls back to this repo's older `spikingjelly.clock_driven.neuron` path.
+
+No-train validation sweep with ANN checkpoint and SpikingJelly LIF:
+
+```bash
+git pull origin main
+bash exp/eval_trainable_snn_block_sweep_lif.sh
+```
+
+Equivalent explicit command:
+
+```bash
+SNN_SPIKE_LAYER=lif \
+SNN_LIF_TAU=2.0 \
+SNN_LIF_BACKEND=torch \
+SWEEP_EPOCHS=0 \
+SWEEP_DISTILL_WEIGHT=0 \
+bash exp/eval_trainable_snn_block_sweep.sh
+```
+
+`eval_trainable_snn_block_sweep_lif.sh` also sets `SWEEP_DUMP_SPIKE_STATS=1`, so each run writes `spike_stats.json`. For signed LIF, spike output should be in `{-1, 0, +1}`; with `SNN_SIGNED_SPIKES=0`, it should be `{0, 1}`.

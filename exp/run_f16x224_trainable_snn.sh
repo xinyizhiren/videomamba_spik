@@ -29,11 +29,14 @@ SNN_BLOCK_TAG="${SNN_BLOCK_TAG:-none}"
 SNN_TIMESTEPS="${SNN_TIMESTEPS:-4}"
 SNN_SPIKE_PATCH="${SNN_SPIKE_PATCH:-0}"
 SNN_SPIKE_POSITION="${SNN_SPIKE_POSITION:-post}"
+SNN_SPIKE_LAYER="${SNN_SPIKE_LAYER:-trainable}"
 SNN_SIGNED_SPIKES="${SNN_SIGNED_SPIKES:-1}"
 SNN_TRAIN_THRESHOLD="${SNN_TRAIN_THRESHOLD:-1}"
 SNN_THRESHOLD_INIT="${SNN_THRESHOLD_INIT:-1.0}"
 SNN_THRESHOLD_PERCENTILE="${SNN_THRESHOLD_PERCENTILE:-0.99}"
 SNN_SURROGATE_ALPHA="${SNN_SURROGATE_ALPHA:-4.0}"
+SNN_LIF_TAU="${SNN_LIF_TAU:-2.0}"
+SNN_LIF_BACKEND="${SNN_LIF_BACKEND:-torch}"
 SPIKE_LR_MULTIPLIER="${SPIKE_LR_MULTIPLIER:-5.0}"
 
 JOB_NAME="${JOB_NAME:-videomamba_small_trainable_snn_b${SNN_BLOCK_TAG}_t${SNN_TIMESTEPS}}"
@@ -55,6 +58,7 @@ DEBUG_OVERFIT_SAMPLES="${DEBUG_OVERFIT_SAMPLES:-0}"
 CUDNN_BENCHMARK="${CUDNN_BENCHMARK:-0}"
 DUMP_MODEL_SUMMARY="${DUMP_MODEL_SUMMARY:-1}"
 SUMMARY_DEPTH="${SUMMARY_DEPTH:-5}"
+DUMP_SPIKE_STATS="${DUMP_SPIKE_STATS:-0}"
 SKIP_INITIAL_BEST_CHECKPOINT="${SKIP_INITIAL_BEST_CHECKPOINT:-0}"
 
 DISTILL_WEIGHT="${DISTILL_WEIGHT:-0.5}"
@@ -94,12 +98,16 @@ echo "TEACHER_CHECKPOINT=${TEACHER_CHECKPOINT}"
 echo "OUTPUT_DIR=${OUTPUT_DIR}"
 echo "SNN_BLOCK_INDICES=${SNN_BLOCK_INDICES}"
 echo "SNN_SPIKE_POSITION=${SNN_SPIKE_POSITION}"
+echo "SNN_SPIKE_LAYER=${SNN_SPIKE_LAYER}"
 echo "SNN_TIMESTEPS=${SNN_TIMESTEPS}"
+echo "SNN_LIF_TAU=${SNN_LIF_TAU}"
+echo "SNN_LIF_BACKEND=${SNN_LIF_BACKEND}"
 echo "BATCH_SIZE=${BATCH_SIZE}"
 echo "UPDATE_FREQ=${UPDATE_FREQ}"
 echo "DISTILL_WEIGHT=${DISTILL_WEIGHT}"
 echo "CUDNN_BENCHMARK=${CUDNN_BENCHMARK}"
 echo "DUMP_MODEL_SUMMARY=${DUMP_MODEL_SUMMARY}"
+echo "DUMP_SPIKE_STATS=${DUMP_SPIKE_STATS}"
 
 CMD=(
         "${RUN_CMD[@]}"
@@ -135,10 +143,13 @@ CMD=(
         --view_ce_loss_weight "${VIEW_CE_LOSS_WEIGHT}" \
         --snn_block_indices "${SNN_BLOCK_INDICES}" \
         --snn_spike_position "${SNN_SPIKE_POSITION}" \
+        --snn_spike_layer "${SNN_SPIKE_LAYER}" \
         --snn_timesteps "${SNN_TIMESTEPS}" \
         --snn_threshold_init "${SNN_THRESHOLD_INIT}" \
         --snn_threshold_percentile "${SNN_THRESHOLD_PERCENTILE}" \
         --snn_surrogate_alpha "${SNN_SURROGATE_ALPHA}" \
+        --snn_lif_tau "${SNN_LIF_TAU}" \
+        --snn_lif_backend "${SNN_LIF_BACKEND}" \
         --spike_lr_multiplier "${SPIKE_LR_MULTIPLIER}" \
         --train_crop_min_scale "${TRAIN_CROP_MIN_SCALE}" \
         --train_crop_max_scale "${TRAIN_CROP_MAX_SCALE}" \
@@ -154,6 +165,10 @@ fi
 
 if [ "${DUMP_MODEL_SUMMARY}" != "0" ]; then
         CMD+=(--dump_model_summary --summary_depth "${SUMMARY_DEPTH}")
+fi
+
+if [ "${DUMP_SPIKE_STATS}" != "0" ]; then
+        CMD+=(--dump_spike_stats)
 fi
 
 if [ "${SKIP_INITIAL_BEST_CHECKPOINT}" != "0" ]; then

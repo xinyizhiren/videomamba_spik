@@ -166,6 +166,7 @@ def get_args():
     parser.add_argument("--skip_initial_best_checkpoint", action="store_true", default=False)
     parser.add_argument("--dump_model_summary", action="store_true", default=False)
     parser.add_argument("--summary_depth", default=5, type=int)
+    parser.add_argument("--dump_spike_stats", action="store_true", default=False)
 
     parser.add_argument("--input_size", default=224, type=int)
     parser.add_argument("--short_side_size", default=224, type=int)
@@ -184,12 +185,15 @@ def get_args():
     parser.add_argument("--snn_block_indices", default="0")
     parser.add_argument("--snn_spike_patch", action="store_true", default=False)
     parser.add_argument("--snn_spike_position", default="post", choices=("pre", "post", "prepost"))
+    parser.add_argument("--snn_spike_layer", default="trainable", choices=("trainable", "lif"))
     parser.add_argument("--snn_unsigned_spikes", action="store_false", dest="snn_signed_spikes")
     parser.add_argument("--snn_timesteps", default=4, type=int)
     parser.add_argument("--snn_threshold_init", default=1.0, type=float)
     parser.add_argument("--snn_threshold_percentile", default=0.99, type=float)
     parser.add_argument("--snn_fixed_threshold", action="store_false", dest="snn_train_threshold")
     parser.add_argument("--snn_surrogate_alpha", default=4.0, type=float)
+    parser.add_argument("--snn_lif_tau", default=2.0, type=float)
+    parser.add_argument("--snn_lif_backend", default="torch")
     parser.add_argument("--spike_lr_multiplier", default=5.0, type=float)
     parser.add_argument("--distill_weight", default=0.0, type=float)
     parser.add_argument("--distill_temperature", default=2.0, type=float)
@@ -342,12 +346,15 @@ def build_model(args):
             spike_patch=args.snn_spike_patch,
             spike_block_indices=parse_int_tuple(args.snn_block_indices),
             spike_position=args.snn_spike_position,
+            spike_layer=args.snn_spike_layer,
             snn_timesteps=args.snn_timesteps,
             signed_spikes=args.snn_signed_spikes,
             threshold_init=args.snn_threshold_init,
             threshold_percentile=args.snn_threshold_percentile,
             train_threshold=args.snn_train_threshold,
             surrogate_alpha=args.snn_surrogate_alpha,
+            lif_tau=args.snn_lif_tau,
+            lif_backend=args.snn_lif_backend,
         )
 
     if model_name == "spikmamba_fixed":
@@ -859,13 +866,88 @@ def write_run_metadata(args, model, teacher_model=None):
         "active_spike_parameter_names": sorted(active_spike_parameter_names(target)),
         "spike_patch": bool(getattr(target, "spike_patch", False)),
         "spike_position": getattr(target, "spike_position", None),
+        "spike_layer": getattr(target, "spike_layer", None),
         "spike_block_indices": list(getattr(target, "spike_block_indices", [])),
         "snn_timesteps": getattr(target, "snn_timesteps", None),
         "signed_spikes": getattr(target, "signed_spikes", None),
+        "lif_tau": getattr(target, "lif_tau", None),
+        "lif_backend": getattr(target, "lif_backend", None),
     }
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     with open(Path(args.output_dir) / "run_metadata.json", "w", encoding="utf-8") as f:
         json.dump(metadata, f, ensure_ascii=False, indent=2, sort_keys=True)
+
+
+@torch.no_grad()
+def dump_spike_stats_from_train_batch(model, loader, device, args):
+    if not is_main_process() or not args.dump_spike_stats:
+        return
+    target = unwrap_model(model)
+    active_names = set(active_spike_module_names(target))
+    if not active_names:
+        return
+
+    module_lookup = dict(target.named_modules())
+    stats = OrderedDict()
+    handles = []
+
+    def make_hook(name):
+        def hook(_module, _inputs, output):
+            if isinstance(output, (tuple, list)):
+                output_tensor = output[0]
+            else:
+                output_tensor = output
+            if not torch.is_tensor(output_tensor):
+                return
+            values = output_tensor.detach().float()
+            flat = values.reshape(-1)
+            sample = flat[: min(flat.numel(), 50000)]
+            unique_sample = torch.unique(sample).detach().cpu()
+            if unique_sample.numel() > 16:
+                unique_values = unique_sample[:16].tolist()
+                unique_note = "truncated"
+            else:
+                unique_values = unique_sample.tolist()
+                unique_note = "complete_for_sample"
+            stats[name] = {
+                "shape": list(values.shape),
+                "min": float(values.min().item()),
+                "max": float(values.max().item()),
+                "mean": float(values.mean().item()),
+                "zero_fraction": float((values == 0).float().mean().item()),
+                "nonzero_fraction": float((values != 0).float().mean().item()),
+                "unique_sample_count": int(unique_sample.numel()),
+                "unique_values_sample": unique_values,
+                "unique_values_note": unique_note,
+            }
+
+        return hook
+
+    for name in active_names:
+        module = module_lookup.get(name)
+        if module is not None:
+            handles.append(module.register_forward_hook(make_hook(name)))
+
+    was_training = target.training
+    target.eval()
+    try:
+        batch = next(iter(loader))
+    except StopIteration:
+        return
+    try:
+        view1, view2, _ = move_train_batch(batch, device)
+        reset_stateful_modules(target)
+        with amp_context(device, args):
+            _ = forward_train_logits(target, view1, view2)
+        reset_stateful_modules(target)
+    finally:
+        for handle in handles:
+            handle.remove()
+        target.train(was_training)
+
+    output_path = Path(args.output_dir) / "spike_stats.json"
+    output_path.write_text(json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8")
+    main_print(f"Saved spike output stats to {output_path}")
 
 
 def run(args):
@@ -990,6 +1072,7 @@ def run(args):
         initialize_spikes_from_train_batch(model, train_loader, device, args)
 
     dump_model_summary(args, model, device)
+    dump_spike_stats_from_train_batch(model, train_loader, device, args)
 
     if not args.skip_initial_eval:
         initial_val_stats = validate(model, val_loader, criterion, device, args)

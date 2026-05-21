@@ -1,0 +1,30 @@
+#!/bin/bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+export SNN_SPIKE_LAYER="${SNN_SPIKE_LAYER:-lif}"
+export SNN_LIF_TAU="${SNN_LIF_TAU:-2.0}"
+export SNN_LIF_BACKEND="${SNN_LIF_BACKEND:-torch}"
+export SNN_SPIKE_POSITION="${SNN_SPIKE_POSITION:-post}"
+export SNN_SPIKE_PATCH="${SNN_SPIKE_PATCH:-0}"
+export SNN_TIMESTEPS="${SNN_TIMESTEPS:-4}"
+export SWEEP_EPOCHS="${SWEEP_EPOCHS:-0}"
+export SWEEP_DISTILL_WEIGHT="${SWEEP_DISTILL_WEIGHT:-0}"
+export SWEEP_DUMP_MODEL_SUMMARY="${SWEEP_DUMP_MODEL_SUMMARY:-0}"
+export SWEEP_DUMP_SPIKE_STATS="${SWEEP_DUMP_SPIKE_STATS:-1}"
+export SWEEP_SKIP_INITIAL_BEST_CHECKPOINT="${SWEEP_SKIP_INITIAL_BEST_CHECKPOINT:-1}"
+export SWEEP_TAG="${SWEEP_TAG:-lif_no_train_$(date +%Y%m%d_%H%M%S)}"
+
+echo "Trainable SNN no-train block sweep with SpikingJelly MultiStepLIFNode"
+echo "SNN_SPIKE_LAYER=${SNN_SPIKE_LAYER}"
+echo "SNN_LIF_TAU=${SNN_LIF_TAU}"
+echo "SNN_LIF_BACKEND=${SNN_LIF_BACKEND}"
+echo "SNN_SPIKE_POSITION=${SNN_SPIKE_POSITION}"
+echo "SNN_SPIKE_PATCH=${SNN_SPIKE_PATCH}"
+echo "SNN_TIMESTEPS=${SNN_TIMESTEPS}"
+echo "SWEEP_EPOCHS=${SWEEP_EPOCHS}"
+echo "SWEEP_DUMP_SPIKE_STATS=${SWEEP_DUMP_SPIKE_STATS}"
+
+bash "${PROJECT_DIR}/exp/eval_trainable_snn_block_sweep.sh"

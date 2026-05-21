@@ -120,6 +120,95 @@ class TrainableSpike5d(TrainableSpikeBase):
         return x.permute(0, 2, 3, 4, 1).reshape(-1, self.num_features)
 
 
+def import_multistep_lif_node():
+    try:
+        from spikingjelly.activation_based.neuron import MultiStepLIFNode
+    except ImportError:
+        from spikingjelly.clock_driven.neuron import MultiStepLIFNode
+    return MultiStepLIFNode
+
+
+class SpikingJellyLIFBase(nn.Module):
+    def __init__(
+        self,
+        num_features,
+        signed=True,
+        tau=2.0,
+        detach_reset=True,
+        backend="torch",
+    ):
+        super().__init__()
+        self.num_features = int(num_features)
+        self.signed = bool(signed)
+        self.tau = float(tau)
+        self.detach_reset = bool(detach_reset)
+        self.backend = str(backend)
+        MultiStepLIFNode = import_multistep_lif_node()
+        self.node = MultiStepLIFNode(
+            tau=self.tau,
+            detach_reset=self.detach_reset,
+            backend=self.backend,
+        )
+
+    def _preprocess(self, x):
+        if self.signed:
+            return x.abs(), torch.sign(x)
+        return F.relu(x), None
+
+    def _restore(self, x, sign):
+        return x if sign is None else x * sign
+
+    def reset(self):
+        if hasattr(self.node, "reset"):
+            self.node.reset()
+        elif hasattr(self.node, "v"):
+            self.node.v = None
+
+
+class SpikingJellyLIF3dSeq(SpikingJellyLIFBase):
+    def forward(self, x):
+        base, sign = self._preprocess(x)
+        spike = self.node(base.unsqueeze(0)).squeeze(0)
+        return self._restore(spike, sign)
+
+
+class SpikingJellyLIF5d(SpikingJellyLIFBase):
+    def forward(self, x):
+        base, sign = self._preprocess(x)
+        spike = self.node(base.unsqueeze(0)).squeeze(0)
+        return self._restore(spike, sign)
+
+
+def make_spike_module(kind, rank, num_features, spike_kwargs):
+    kind = str(kind).lower()
+    if kind == "trainable":
+        trainable_kwargs = {
+            key: spike_kwargs[key]
+            for key in (
+                "threshold_init",
+                "threshold_percentile",
+                "train_threshold",
+                "signed",
+                "surrogate_alpha",
+                "detach_reset",
+            )
+        }
+        if rank == "5d":
+            return TrainableSpike5d(num_features, **trainable_kwargs)
+        return TrainableSpike3dSeq(num_features, **trainable_kwargs)
+    if kind == "lif":
+        lif_kwargs = dict(
+            signed=spike_kwargs["signed"],
+            tau=spike_kwargs["lif_tau"],
+            detach_reset=spike_kwargs["detach_reset"],
+            backend=spike_kwargs["lif_backend"],
+        )
+        if rank == "5d":
+            return SpikingJellyLIF5d(num_features, **lif_kwargs)
+        return SpikingJellyLIF3dSeq(num_features, **lif_kwargs)
+    raise ValueError(f"Unsupported spike_layer: {kind}")
+
+
 class TrainableVideoMambaSNN(CleanVideoMamba):
     def __init__(
         self,
@@ -127,12 +216,15 @@ class TrainableVideoMambaSNN(CleanVideoMamba):
         spike_patch=False,
         spike_block_indices=(0,),
         spike_position="post",
+        spike_layer="trainable",
         snn_timesteps=4,
         signed_spikes=True,
         threshold_init=1.0,
         threshold_percentile=0.99,
         train_threshold=True,
         surrogate_alpha=4.0,
+        lif_tau=2.0,
+        lif_backend="torch",
         detach_reset=True,
         **kwargs,
     ):
@@ -142,8 +234,14 @@ class TrainableVideoMambaSNN(CleanVideoMamba):
         self.spike_position = str(spike_position).lower()
         if self.spike_position not in {"pre", "post", "prepost"}:
             raise ValueError(f"Unsupported spike_position: {spike_position}")
+        self.spike_layer = str(spike_layer).lower()
+        if self.spike_layer not in {"trainable", "lif"}:
+            raise ValueError(f"Unsupported spike_layer: {spike_layer}")
         self.snn_timesteps = int(snn_timesteps)
         self.signed_spikes = bool(signed_spikes)
+        self.lif_tau = float(lif_tau)
+        self.lif_backend = str(lif_backend)
+        self.detach_reset = bool(detach_reset)
 
         spike_kwargs = dict(
             threshold_init=threshold_init,
@@ -151,19 +249,21 @@ class TrainableVideoMambaSNN(CleanVideoMamba):
             train_threshold=train_threshold,
             signed=signed_spikes,
             surrogate_alpha=surrogate_alpha,
+            lif_tau=lif_tau,
+            lif_backend=lif_backend,
             detach_reset=detach_reset,
         )
-        self.patch_spike = TrainableSpike5d(self.embed_dim, **spike_kwargs)
+        self.patch_spike = make_spike_module(self.spike_layer, "5d", self.embed_dim, spike_kwargs)
         self.pre_block_spikes = nn.ModuleDict(
             OrderedDict(
-                (str(idx), TrainableSpike3dSeq(self.embed_dim, **spike_kwargs))
+                (str(idx), make_spike_module(self.spike_layer, "3d", self.embed_dim, spike_kwargs))
                 for idx in self.spike_block_indices
                 if self.spike_position in {"pre", "prepost"}
             )
         )
         self.block_spikes = nn.ModuleDict(
             OrderedDict(
-                (str(idx), TrainableSpike3dSeq(self.embed_dim, **spike_kwargs))
+                (str(idx), make_spike_module(self.spike_layer, "3d", self.embed_dim, spike_kwargs))
                 for idx in self.spike_block_indices
                 if self.spike_position in {"post", "prepost"}
             )
@@ -194,6 +294,8 @@ class TrainableVideoMambaSNN(CleanVideoMamba):
         return names
 
     def active_spike_parameter_names(self):
+        if self.spike_layer != "trainable":
+            return []
         names = []
         if self.spike_patch:
             names.append("patch_spike.log_threshold")
@@ -294,12 +396,15 @@ def create_videomamba_small_trainable_snn(
     spike_patch=False,
     spike_block_indices=(0,),
     spike_position="post",
+    spike_layer="trainable",
     snn_timesteps=4,
     signed_spikes=True,
     threshold_init=1.0,
     threshold_percentile=0.99,
     train_threshold=True,
     surrogate_alpha=4.0,
+    lif_tau=2.0,
+    lif_backend="torch",
     detach_reset=True,
 ):
     return TrainableVideoMambaSNN(
@@ -319,11 +424,14 @@ def create_videomamba_small_trainable_snn(
         spike_patch=spike_patch,
         spike_block_indices=spike_block_indices,
         spike_position=spike_position,
+        spike_layer=spike_layer,
         snn_timesteps=snn_timesteps,
         signed_spikes=signed_spikes,
         threshold_init=threshold_init,
         threshold_percentile=threshold_percentile,
         train_threshold=train_threshold,
         surrogate_alpha=surrogate_alpha,
+        lif_tau=lif_tau,
+        lif_backend=lif_backend,
         detach_reset=detach_reset,
     )
