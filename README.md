@@ -1,6 +1,7 @@
 # VideoMamba 24-Block LIF SNN Training
 
-This repository is now trimmed around one active workflow:
+This repository is now trimmed around the active SNN workflow while retaining
+the clean ANN training/evaluation scripts used to build the teacher checkpoint:
 
 - base network: clean VideoMamba Small
 - SNN wrapper: `models/videomamba_trainable_snn.py`
@@ -10,8 +11,8 @@ This repository is now trimmed around one active workflow:
 - SNN timesteps: `4`
 - input clip: `16` sampled video frames at `224 x 224`
 
-Older ANN-to-SNN conversion, ANN/scratch training, sweep scripts, report builders,
-and historical outputs are preserved under `trash_code/`.
+Older ANN-to-SNN conversion, staged SNN sweeps, report builders, and historical
+outputs are preserved under `trash_code/`.
 
 ## Active Layout
 
@@ -20,6 +21,11 @@ and historical outputs are preserved under `trash_code/`.
 |-- datasets/
 |   `-- multiview_action_clean.py
 |-- exp/
+|   |-- run_f16x224_ann_et_clean.sh
+|   |-- run_f16x224_ann_et_clean_scratch.sh
+|   |-- run_f16x224_ann_et_clean_test.sh
+|   |-- run_f16x224_ann_et_clean_valtest.sh
+|   |-- run_f16x224_ann_et_clean_valtest_test.sh
 |   |-- run_f16x224_lif_snn_b0-23_from_b0-11_train.sh
 |   `-- run_f16x224_trainable_snn.sh
 |-- models/
@@ -77,6 +83,22 @@ The active script writes to:
 ```text
 outputs/videomamba_small_lif_unsigned_snn_b0-1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-16-17-18-19-20-21-22-23_t4_from_b0-11/
 ```
+
+## ANN Teacher Training
+
+The clean ANN training scripts are kept in `exp/` because the SNN route depends
+on the ANN teacher and checkpoint initialization.
+
+```bash
+bash exp/run_f16x224_ann_et_clean.sh
+```
+
+Useful ANN entries:
+
+- `exp/run_f16x224_ann_et_clean.sh`: train/fine-tune clean ANN from K400 weights.
+- `exp/run_f16x224_ann_et_clean_scratch.sh`: train clean ANN from random initialization.
+- `exp/run_f16x224_ann_et_clean_test.sh`: test a trained clean ANN checkpoint.
+- `exp/run_f16x224_ann_et_clean_valtest.sh`: validation/test utility.
 
 ## Git Notes
 

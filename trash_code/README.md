@@ -9,7 +9,6 @@ LIF SNN path while preserving them for reference.
 code/
 |-- ann2snn/          # Direct ANN-to-SNN conversion utilities and notes.
 |-- exp_ann2snn/      # Old ANN-to-SNN launcher scripts.
-|-- exp_ann_clean/    # Old clean ANN, scratch, and eval launchers.
 |-- exp_lif_staged/   # Earlier 3/6/12-block LIF staged launchers.
 |-- exp_sweeps/       # Validation-only and scope sweep launchers.
 |-- legacy_models/    # Old standalone SpikMamba baseline.
