@@ -1,0 +1,5 @@
+# VideoMamba ANN2SNN Ablation Summary
+
+| run | patch | blocks | scale | T | delay | calib_mse | ann_acc1 | snn_acc1 | drop | test_snn_acc1 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| no results | - | - | - | - | - | - | - | - | - | - |

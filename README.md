@@ -1,128 +1,108 @@
-# VideoMamba Clean Cross-View Training
+# VideoMamba 24-Block LIF SNN Training
 
-This repository is trimmed for one active workflow: clean cross-view ANN fine-tuning from
-`exp/run_f16x224_ann_et_clean.sh`, with the optional fixed
-SpikMamba model and ANN-to-SNN conversion utilities kept for follow-up experiments.
+This repository is now trimmed around one active workflow:
 
-## Repository Layout
+- base network: clean VideoMamba Small
+- SNN wrapper: `models/videomamba_trainable_snn.py`
+- spike layer: SpikingJelly `MultiStepLIFNode`
+- spike mode: unsigned `{0, 1}`
+- spike scope: all 24 VideoMamba blocks, post-block insertion
+- SNN timesteps: `4`
+- input clip: `16` sampled video frames at `224 x 224`
+
+Older ANN-to-SNN conversion, ANN/scratch training, sweep scripts, report builders,
+and historical outputs are preserved under `trash_code/`.
+
+## Active Layout
 
 ```text
 .
-├── ann2snn/                                  # ANN-to-SNN conversion helpers
-├── datasets/
-│   ├── __init__.py
-│   └── multiview_action_clean.py             # CSV video loader and transforms
-├── exp/
-│   ├── run_f16x224_ann_et_clean.sh           # main clean training entry
-│   ├── run_f16x224_ann_et_clean_scratch.sh   # train from random initialization
-│   ├── run_f16x224_ann_et_clean_test.sh      # eval-only entry
-│   ├── run_f16x224_ann_et_clean_valtest.sh   # optional val+test validation run
-│   └── run_f16x224_ann_et_clean_valtest_test.sh
-├── models/
-│   ├── mamba_simple.py
-│   ├── videomamba.py
-│   ├── videomamba_clean.py
-│   └── videomamba_spik_baseline_1_fixed.py   # optional SpikMamba model
-├── scripts/
-│   ├── run_server.sh
-│   ├── sync_results_back.sh
-│   └── sync_to_server.sh
-├── tools/
-│   └── merge_val_test_csv.py
-├── run_class_finetuning_et_clean.py
-├── requirements.txt
-└── .gitignore
+|-- datasets/
+|   `-- multiview_action_clean.py
+|-- exp/
+|   |-- run_f16x224_lif_snn_b0-23_from_b0-11_train.sh
+|   `-- run_f16x224_trainable_snn.sh
+|-- models/
+|   |-- mamba_simple.py
+|   |-- videomamba.py
+|   |-- videomamba_clean.py
+|   `-- videomamba_trainable_snn.py
+|-- outputs/
+|   |-- videomamba_small_cv_train12_test3_ann_clean_full/
+|   |-- videomamba_small_lif_unsigned_snn_b0-1-2-3-4-5-6-7-8-9-10-11_t4_from_b0-5/
+|   `-- videomamba_small_lif_unsigned_snn_b0-1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-16-17-18-19-20-21-22-23_t4_from_b0-11/
+|-- trash_code/
+|-- run_class_finetuning_et_clean.py
+|-- requirements.txt
+`-- .gitignore
 ```
 
-The untrimmed local snapshot before cleanup is preserved on the `main_old` branch.
+The two retained non-active output folders are dependencies for the active run:
 
-## Training
+- `videomamba_small_cv_train12_test3_ann_clean_full`: clean ANN teacher.
+- `videomamba_small_lif_unsigned_snn_b0-...-11_t4_from_b0-5`: default initialization checkpoint for the 24-block run.
 
-Put CSV annotation files and videos outside Git, then point the script to those paths:
+## Multi-GPU Training
+
+The active launcher defaults to two GPUs and uses `torchrun` through the shared
+SNN launcher:
 
 ```bash
-DATA_PATH=/data/users/ouyangys/data/multiview_action_videos \
-PREFIX=/data/users/ouyangys/data/multiview_action_videos \
-MODEL_PATH=/path/to/videomamba_s16_k400_f16_res224.pth \
-bash exp/run_f16x224_ann_et_clean.sh
+bash exp/run_f16x224_lif_snn_b0-23_from_b0-11_train.sh
 ```
 
-Single-node multi-GPU training uses `torchrun` automatically when `NPROC_PER_NODE` is
-greater than 1:
+Default distributed settings:
 
-```bash
-CUDA_VISIBLE_DEVICES=0,1 NPROC_PER_NODE=2 bash exp/run_f16x224_ann_et_clean.sh
+```text
+CUDA_VISIBLE_DEVICES=0,1
+NPROC_PER_NODE=2
+NNODES=1
+MASTER_PORT=29505
 ```
 
-Train from scratch without loading K400 weights:
+Single-card override:
 
 ```bash
-bash exp/run_f16x224_ann_et_clean_scratch.sh
+CUDA_VISIBLE_DEVICES=2 NPROC_PER_NODE=1 bash exp/run_f16x224_lif_snn_b0-23_from_b0-11_train.sh
 ```
 
-The scratch launcher uses a separate output directory and defaults to longer training
-(`EPOCHS=120`, `WARMUP_EPOCHS=10`, `LR=3e-4`, `DROP_PATH=0.05`). Override any value the
-same way as the main launcher, for example:
+Common overrides:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1 NPROC_PER_NODE=2 LR=1e-4 bash exp/run_f16x224_ann_et_clean_scratch.sh
+EPOCHS=30 LR=1e-5 BATCH_SIZE=1 UPDATE_FREQ=2 bash exp/run_f16x224_lif_snn_b0-23_from_b0-11_train.sh
 ```
 
-Outputs are written under `outputs/` by default. Checkpoints and generated artifacts are
-ignored by Git, while `log.txt`, `*_log.txt`, and `.log` files under `outputs/` are
-trackable. The default pretrained checkpoint name in the script is
-`videomamba_s16_k400_f16_res224.pth`; keep that file local or on the server, not in the
-repository.
+The active script writes to:
 
-Evaluation uses the same Python entry in `--eval` mode:
-
-```bash
-CHECKPOINT_PATH=outputs/videomamba_small_cv_train12_test3_ann_clean_full/best.pth \
-bash exp/run_f16x224_ann_et_clean_test.sh
+```text
+outputs/videomamba_small_lif_unsigned_snn_b0-1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-16-17-18-19-20-21-22-23_t4_from_b0-11/
 ```
 
-To instantiate the retained pulse model through the clean entry, set:
+## Git Notes
+
+Large files remain ignored:
+
+- `*.pth`
+- `*.pt`
+- `*.ckpt`
+- `*.npy`
+- `*.npz`
+- TensorBoard and other binary artifacts
+
+Training logs and metadata are still trackable under `outputs/`:
+
+- `log.txt`
+- `*_log.txt`
+- `model_summary.txt`
+- `run_metadata.json`
+- `spike_stats.json`
+
+Before committing:
 
 ```bash
-MODEL_NAME=spikmamba_fixed bash exp/run_f16x224_ann_et_clean.sh
-```
-
-## Collaboration Workflow
-
-Use Git for source code, scripts, docs, and training logs. Do not add data, pretrained
-weights, checkpoints, tensorboard events, `runs/`, or `wandb/`.
-
-Typical local flow:
-
-```bash
-git status
-bash exp/run_f16x224_ann_et_clean.sh
-git diff
 git add -A :/
 git status --short
 git diff --cached --name-status
-git commit -m "describe the training change"
+git commit -m "update 24-block lif snn training"
 git push origin main
 ```
-
-Before committing from the server, this quick check should print nothing:
-
-```bash
-git diff --cached --name-only | grep -E '\.(pth|pt|ckpt|npy|npz|h5|hdf5)$' || true
-```
-
-Server flow:
-
-```bash
-git pull
-bash scripts/run_server.sh
-```
-
-For temporary server sync before committing, configure `REMOTE` and `REMOTE_DIR`, then use:
-
-```bash
-DRY_RUN=1 REMOTE=user@server REMOTE_DIR=/path/to/video_sm bash scripts/sync_to_server.sh
-DRY_RUN=0 REMOTE=user@server REMOTE_DIR=/path/to/video_sm bash scripts/sync_to_server.sh
-```
-
-`DRY_RUN=1` is the default. Flip it only after checking the rsync plan.

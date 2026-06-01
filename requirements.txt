@@ -11,5 +11,5 @@ torchinfo
 mamba-ssm
 causal-conv1d
 
-# Required only when MODEL_NAME=spikmamba_fixed or ANN-to-SNN tools are used.
+# Required by the active LIF SNN layer.
 spikingjelly

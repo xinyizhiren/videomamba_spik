@@ -5,6 +5,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BASE_LAUNCHER="${PROJECT_DIR}/exp/run_f16x224_trainable_snn.sh"
 
+# Active workflow: train the 24-block unsigned LIF SNN.  Default to two GPUs;
+# override with CUDA_VISIBLE_DEVICES=2 NPROC_PER_NODE=1 for a single-card run.
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1}"
+export NPROC_PER_NODE="${NPROC_PER_NODE:-2}"
+export NNODES="${NNODES:-1}"
+export NODE_RANK="${NODE_RANK:-0}"
+export MASTER_ADDR="${MASTER_ADDR:-127.0.0.1}"
+export MASTER_PORT="${MASTER_PORT:-29505}"
+
 export SNN_SPIKE_LAYER="${SNN_SPIKE_LAYER:-lif}"
 export SNN_LIF_TAU="${SNN_LIF_TAU:-2.0}"
 export SNN_LIF_BACKEND="${SNN_LIF_BACKEND:-torch}"
@@ -40,6 +49,9 @@ export DUMP_MODEL_SUMMARY="${DUMP_MODEL_SUMMARY:-1}"
 export DUMP_SPIKE_STATS="${DUMP_SPIKE_STATS:-1}"
 
 echo "Training full-scope VideoMamba LIF SNN from b0-11"
+echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
+echo "NPROC_PER_NODE=${NPROC_PER_NODE}"
+echo "NNODES=${NNODES}"
 echo "MODEL_PATH=${MODEL_PATH}"
 echo "TEACHER_CHECKPOINT=${TEACHER_CHECKPOINT}"
 echo "SNN_BLOCK_INDICES=${SNN_BLOCK_INDICES}"

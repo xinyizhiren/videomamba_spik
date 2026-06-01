@@ -10,6 +10,7 @@ env/
 # Editor settings
 .vscode/
 .idea/
+.claude/
 
 # Local data and training artifacts
 data/
@@ -47,6 +48,7 @@ logs/**
 # Logs and scheduler output
 *.log
 *.out
+events.out.tfevents*
 !outputs/**/*.log
 !outputs/**/log.txt
 !outputs/**/*_log.txt
@@ -60,3 +62,10 @@ logs/**
 # OS noise
 .DS_Store
 Thumbs.db
+
+# Archived report binaries are kept locally but should not enter Git.
+trash_code/outputs/reports/**/*.pptx
+trash_code/outputs/reports/**/*.png
+trash_code/outputs/reports/**/*.jpg
+trash_code/outputs/reports/**/*.jpeg
+trash_code/outputs/reports/**/*.svg

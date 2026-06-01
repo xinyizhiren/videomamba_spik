@@ -21,8 +21,6 @@ from models.videomamba_clean import create_videomamba_small_clean
 MODEL_ALIASES = {
     "videomamba_small": "videomamba_small_clean",
     "videomamba_small_clean": "videomamba_small_clean",
-    "spikmamba": "spikmamba_fixed",
-    "spikmamba_fixed": "spikmamba_fixed",
     "videomamba_small_trainable_snn": "videomamba_small_trainable_snn",
     "trainable_snn": "videomamba_small_trainable_snn",
 }
@@ -115,7 +113,7 @@ def get_args():
     parser.add_argument(
         "--model",
         default="videomamba_small_clean",
-        help="Model to train: videomamba_small_clean/videomamba_small or spikmamba_fixed/spikmamba.",
+        help="Model to train: videomamba_small_clean/videomamba_small or videomamba_small_trainable_snn/trainable_snn.",
     )
     parser.add_argument("--finetune", default="")
     parser.add_argument("--resume", default="")
@@ -177,11 +175,6 @@ def get_args():
     parser.add_argument("--fc_drop_rate", default=0.0, type=float)
     parser.add_argument("--use_mean_pooling", action="store_true", default=True)
     parser.add_argument("--use_cls", action="store_false", dest="use_mean_pooling")
-    parser.add_argument("--spik_patch_size", default=14, type=int)
-    parser.add_argument("--spik_embed_dims", default=384, type=int)
-    parser.add_argument("--spik_time_steps", default=1, type=int)
-    parser.add_argument("--spik_bimamba", action="store_true", default=True)
-    parser.add_argument("--no_spik_bimamba", action="store_false", dest="spik_bimamba")
     parser.add_argument("--snn_block_indices", default="0")
     parser.add_argument("--snn_spike_patch", action="store_true", default=False)
     parser.add_argument("--snn_spike_position", default="post", choices=("pre", "post", "prepost"))
@@ -355,24 +348,6 @@ def build_model(args):
             surrogate_alpha=args.snn_surrogate_alpha,
             lif_tau=args.snn_lif_tau,
             lif_backend=args.snn_lif_backend,
-        )
-
-    if model_name == "spikmamba_fixed":
-        from models.videomamba_spik_baseline_1_fixed import spikmamba_fixed
-
-        return spikmamba_fixed(
-            pretrained=False,
-            img_size_h=args.input_size,
-            img_size_w=args.input_size,
-            patch_size=args.spik_patch_size,
-            embed_dims=args.spik_embed_dims,
-            num_classes=args.nb_classes,
-            batch_size=args.batch_size,
-            num_frames=args.num_frames,
-            kernel_size=args.tubelet_size,
-            drop_path_rate=args.drop_path,
-            T=args.spik_time_steps,
-            bimamba=args.spik_bimamba,
         )
 
     raise AssertionError(f"Unhandled normalized model: {model_name}")
