@@ -8,11 +8,13 @@ from pathlib import Path
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Merge held-out validation and test CSV files into one CSV.")
+        description="Merge held-out validation and test CSV files into one CSV."
+    )
     parser.add_argument(
         "--data-path",
         default="/data/users/ouyangys/data/multiview_action_videos/",
-        help="Directory containing the CSV files.")
+        help="Directory containing the CSV files.",
+    )
     parser.add_argument("--val-csv", default="v03_val_set.csv")
     parser.add_argument("--test-csv", default="v03_test_set.csv")
     parser.add_argument("--output-csv", default="v03_val_test_set.csv")
@@ -21,7 +23,8 @@ def parse_args():
         "--dedupe",
         choices=("none", "sample", "sample_label"),
         default="none",
-        help="Optional duplicate removal mode. Default keeps all rows.")
+        help="Optional duplicate removal mode. Default keeps all rows.",
+    )
     return parser.parse_args()
 
 

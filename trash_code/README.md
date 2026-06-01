@@ -12,8 +12,7 @@ code/
 |-- exp_lif_staged/   # Earlier 3/6/12-block LIF staged launchers.
 |-- exp_sweeps/       # Validation-only and scope sweep launchers.
 |-- legacy_models/    # Old standalone SpikMamba baseline.
-|-- sync_scripts/     # Previous sync/server helper scripts.
-`-- tools/            # Miscellaneous helper scripts.
+`-- sync_scripts/     # Previous sync/server helper scripts.
 ```
 
 ## Outputs

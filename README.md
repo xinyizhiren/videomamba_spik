@@ -33,6 +33,8 @@ outputs are preserved under `trash_code/`.
 |   |-- videomamba.py
 |   |-- videomamba_clean.py
 |   `-- videomamba_trainable_snn.py
+|-- tools/
+|   `-- merge_val_test_csv.py
 |-- outputs/
 |   |-- videomamba_small_cv_train12_test3_ann_clean_full/
 |   |-- videomamba_small_lif_unsigned_snn_b0-1-2-3-4-5-6-7-8-9-10-11_t4_from_b0-5/
@@ -91,6 +93,22 @@ on the ANN teacher and checkpoint initialization.
 
 ```bash
 bash exp/run_f16x224_ann_et_clean.sh
+```
+
+Fine-tune the ANN teacher from an existing checkpoint into a new output folder:
+
+```bash
+MODEL_PATH=outputs/videomamba_small_cv_train12_test3_ann_clean_full/best.pth \
+JOB_NAME=videomamba_small_ann_refine_from_best \
+OUTPUT_DIR=outputs/videomamba_small_ann_refine_from_best \
+LR=1e-5 EPOCHS=20 WARMUP_EPOCHS=1 DROP_PATH=0.05 \
+bash exp/run_f16x224_ann_et_clean.sh
+```
+
+Use multiple GPUs by setting one process per visible GPU:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1 NPROC_PER_NODE=2 BATCH_SIZE=4 bash exp/run_f16x224_ann_et_clean.sh
 ```
 
 Useful ANN entries:
