@@ -7,8 +7,8 @@ BASE_LAUNCHER="${PROJECT_DIR}/exp/run_f16x224_trainable_snn.sh"
 
 # Active workflow: train the 24-block unsigned LIF SNN.  Default to two GPUs;
 # override with CUDA_VISIBLE_DEVICES=2 NPROC_PER_NODE=1 for a single-card run.
-export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1}"
-export NPROC_PER_NODE="${NPROC_PER_NODE:-2}"
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1}"
+export NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
 export NNODES="${NNODES:-1}"
 export NODE_RANK="${NODE_RANK:-0}"
 export MASTER_ADDR="${MASTER_ADDR:-127.0.0.1}"
@@ -23,8 +23,8 @@ export SNN_SPIKE_POSITION="${SNN_SPIKE_POSITION:-post}"
 export SNN_SPIKE_PATCH="${SNN_SPIKE_PATCH:-0}"
 export SNN_TIMESTEPS="${SNN_TIMESTEPS:-4}"
 
-ANN_OUTPUT_DIR="${ANN_OUTPUT_DIR:-${PROJECT_DIR}/outputs/videomamba_small_cv_train12_test3_ann_clean_full}"
-PREV_OUTPUT_DIR="${PREV_OUTPUT_DIR:-${PROJECT_DIR}/outputs/videomamba_small_lif_unsigned_snn_b0-1-2-3-4-5-6-7-8-9-10-11_t${SNN_TIMESTEPS}_from_b0-5}"
+ANN_OUTPUT_DIR="${ANN_OUTPUT_DIR:-${PROJECT_DIR}/outputs/videomamba_small_cv_train12_test3_ann_clean_scratch}"
+PREV_OUTPUT_DIR="${PREV_OUTPUT_DIR:-${PROJECT_DIR}/outputs/videomamba_small_cv_train12_test3_ann_clean_scratch}"
 export MODEL_PATH="${MODEL_PATH:-${PREV_OUTPUT_DIR}/best.pth}"
 export TEACHER_CHECKPOINT="${TEACHER_CHECKPOINT:-${ANN_OUTPUT_DIR}/best.pth}"
 
