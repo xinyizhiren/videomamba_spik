@@ -69,16 +69,20 @@ NNODES=1
 MASTER_PORT=29506
 ```
 
+The valtest launcher ignores generic inherited variables such as `MODEL_PATH`,
+`RESUME_PATH`, `DISTILL_WEIGHT`, `USE_CHECKPOINT`, and `CHECKPOINT_NUM`. Use the
+`VALTEST_*` namespace for intentional overrides.
+
 Two-card override:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1 NPROC_PER_NODE=2 bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
+VALTEST_CUDA_VISIBLE_DEVICES=0,1 VALTEST_NPROC_PER_NODE=2 bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
 ```
 
 Common overrides:
 
 ```bash
-EPOCHS=30 LR=1e-5 BATCH_SIZE=1 UPDATE_FREQ=2 bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
+VALTEST_EPOCHS=30 VALTEST_LR=1e-5 VALTEST_BATCH_SIZE=1 VALTEST_UPDATE_FREQ=2 bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
 ```
 
 The valtest 24-block launcher keeps gradient checkpointing disabled by default:
@@ -93,7 +97,7 @@ DUMP_SPIKE_STATS=0
 If memory is still tight, use these overrides in order:
 
 ```bash
-SNN_TIMESTEPS=2 bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
+VALTEST_SNN_TIMESTEPS=2 bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
 ```
 
 The active script writes to:
@@ -108,7 +112,7 @@ Training prints the best validation result at the end and also writes it to
 Resume the valtest 24-block SNN from its latest checkpoint with the same launcher:
 
 ```bash
-RESUME_FROM_LATEST=1 bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
+bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh resume
 ```
 
 This resolves to:
@@ -120,7 +124,7 @@ outputs/videomamba_small_lif_unsigned_snn_b0-1-2-3-4-5-6-7-8-9-10-11-12-13-14-15
 You can also resume any checkpoint through the same launcher:
 
 ```bash
-RESUME_PATH=outputs/.../latest.pth bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
+VALTEST_RESUME_PATH=outputs/.../latest.pth bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
 ```
 
 ## ANN Teacher Training

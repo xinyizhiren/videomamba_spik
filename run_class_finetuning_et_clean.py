@@ -433,6 +433,7 @@ def load_pretrained(model, path, model_key, min_load_ratio=0.05):
 
 def build_teacher(args, device):
     if args.distill_weight <= 0:
+        main_print("ANN teacher disabled: distill_weight <= 0")
         return None
     checkpoint_path = args.teacher_checkpoint or args.finetune
     if not checkpoint_path:
