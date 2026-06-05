@@ -23,6 +23,7 @@ PREFIX="${PREFIX:-${DATA_PATH}}"
 ANN_OUTPUT_DIR="${ANN_OUTPUT_DIR:-${PROJECT_DIR}/outputs/videomamba_small_cv_train12_test3_ann_clean_full}"
 MODEL_PATH="${MODEL_PATH:-${ANN_OUTPUT_DIR}/best.pth}"
 TEACHER_CHECKPOINT="${TEACHER_CHECKPOINT:-${ANN_OUTPUT_DIR}/best.pth}"
+RESUME_PATH="${RESUME_PATH:-}"
 
 SNN_BLOCK_INDICES="${SNN_BLOCK_INDICES:-0}"
 SNN_BLOCK_TAG="${SNN_BLOCK_INDICES//,/-}"
@@ -75,9 +76,14 @@ TRAIN_CROP_MIN_RATIO="${TRAIN_CROP_MIN_RATIO:-0.75}"
 TRAIN_CROP_MAX_RATIO="${TRAIN_CROP_MAX_RATIO:-1.3333}"
 DISABLE_TRAIN_FLIP="${DISABLE_TRAIN_FLIP:-1}"
 
-if [ ! -f "${MODEL_PATH}" ]; then
+if [ -z "${RESUME_PATH}" ] && [ ! -f "${MODEL_PATH}" ]; then
         echo "Missing ANN checkpoint: ${MODEL_PATH}" >&2
         echo "Set ANN_OUTPUT_DIR or MODEL_PATH to the folder/file containing the trained ANN best.pth." >&2
+        exit 1
+fi
+
+if [ -n "${RESUME_PATH}" ] && [ ! -f "${RESUME_PATH}" ]; then
+        echo "Missing resume checkpoint: ${RESUME_PATH}" >&2
         exit 1
 fi
 
@@ -98,6 +104,7 @@ echo "NPROC_PER_NODE=${NPROC_PER_NODE}"
 echo "NNODES=${NNODES}"
 echo "MODEL_PATH=${MODEL_PATH}"
 echo "TEACHER_CHECKPOINT=${TEACHER_CHECKPOINT}"
+echo "RESUME_PATH=${RESUME_PATH}"
 echo "OUTPUT_DIR=${OUTPUT_DIR}"
 echo "SNN_BLOCK_INDICES=${SNN_BLOCK_INDICES}"
 echo "SNN_SPIKE_POSITION=${SNN_SPIKE_POSITION}"
@@ -179,6 +186,10 @@ fi
 
 if [ "${USE_CHECKPOINT}" != "0" ]; then
         CMD+=(--use_checkpoint)
+fi
+
+if [ -n "${RESUME_PATH}" ]; then
+        CMD+=(--resume "${RESUME_PATH}")
 fi
 
 if [ "${SKIP_INITIAL_BEST_CHECKPOINT}" != "0" ]; then

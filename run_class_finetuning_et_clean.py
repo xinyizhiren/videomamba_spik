@@ -1015,7 +1015,7 @@ def run(args):
     else:
         main_print("Active spike modules: none")
     eval_checkpoint = args.eval_checkpoint or args.resume
-    if not (args.eval and eval_checkpoint):
+    if not args.resume and not (args.eval and eval_checkpoint):
         load_pretrained(model, args.finetune, args.model_key, args.min_pretrained_load_ratio)
     model.to(device)
     teacher_model = None if args.eval else build_teacher(args, device)
