@@ -93,7 +93,6 @@ DUMP_SPIKE_STATS=0
 If memory is still tight, use these overrides in order:
 
 ```bash
-DISTILL_WEIGHT=0 bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
 SNN_TIMESTEPS=2 bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
 ```
 
