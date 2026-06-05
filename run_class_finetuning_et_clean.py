@@ -165,6 +165,8 @@ def get_args():
     parser.add_argument("--dump_model_summary", action="store_true", default=False)
     parser.add_argument("--summary_depth", default=5, type=int)
     parser.add_argument("--dump_spike_stats", action="store_true", default=False)
+    parser.add_argument("--use_checkpoint", action="store_true", default=False)
+    parser.add_argument("--checkpoint_num", default=0, type=int)
 
     parser.add_argument("--input_size", default=224, type=int)
     parser.add_argument("--short_side_size", default=224, type=int)
@@ -348,6 +350,8 @@ def build_model(args):
             surrogate_alpha=args.snn_surrogate_alpha,
             lif_tau=args.snn_lif_tau,
             lif_backend=args.snn_lif_backend,
+            use_checkpoint=args.use_checkpoint,
+            checkpoint_num=args.checkpoint_num,
         )
 
     raise AssertionError(f"Unhandled normalized model: {model_name}")
@@ -660,7 +664,7 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler, device, epoch, 
             view_ce = 0.5 * (criterion(view1_logits, target) + criterion(view2_logits, target))
             distill_loss = fused_logits.new_zeros(())
             if teacher_model is not None and args.distill_weight > 0:
-                with torch.no_grad():
+                with torch.inference_mode():
                     reset_stateful_modules(teacher_model)
                     teacher_fused, teacher_view1, teacher_view2 = forward_train_logits(teacher_model, view1, view2)
                 distill_loss = (
@@ -855,6 +859,8 @@ def write_run_metadata(args, model, teacher_model=None):
         "signed_spikes": getattr(target, "signed_spikes", None),
         "lif_tau": getattr(target, "lif_tau", None),
         "lif_backend": getattr(target, "lif_backend", None),
+        "use_checkpoint": getattr(target, "use_checkpoint", None),
+        "checkpoint_num": getattr(target, "checkpoint_num", None),
     }
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     with open(Path(args.output_dir) / "run_metadata.json", "w", encoding="utf-8") as f:

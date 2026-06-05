@@ -81,6 +81,22 @@ Common overrides:
 EPOCHS=30 LR=1e-5 BATCH_SIZE=1 UPDATE_FREQ=2 bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
 ```
 
+The valtest 24-block launcher defaults to memory-saving block checkpointing:
+
+```text
+USE_CHECKPOINT=1
+CHECKPOINT_NUM=24
+DUMP_MODEL_SUMMARY=0
+DUMP_SPIKE_STATS=0
+```
+
+If memory is still tight, use these overrides in order:
+
+```bash
+DISTILL_WEIGHT=0 bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
+SNN_TIMESTEPS=2 bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
+```
+
 The active script writes to:
 
 ```text

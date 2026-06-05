@@ -60,6 +60,8 @@ CUDNN_BENCHMARK="${CUDNN_BENCHMARK:-0}"
 DUMP_MODEL_SUMMARY="${DUMP_MODEL_SUMMARY:-1}"
 SUMMARY_DEPTH="${SUMMARY_DEPTH:-5}"
 DUMP_SPIKE_STATS="${DUMP_SPIKE_STATS:-0}"
+USE_CHECKPOINT="${USE_CHECKPOINT:-0}"
+CHECKPOINT_NUM="${CHECKPOINT_NUM:-0}"
 SKIP_INITIAL_BEST_CHECKPOINT="${SKIP_INITIAL_BEST_CHECKPOINT:-0}"
 
 DISTILL_WEIGHT="${DISTILL_WEIGHT:-0.5}"
@@ -109,6 +111,8 @@ echo "DISTILL_WEIGHT=${DISTILL_WEIGHT}"
 echo "CUDNN_BENCHMARK=${CUDNN_BENCHMARK}"
 echo "DUMP_MODEL_SUMMARY=${DUMP_MODEL_SUMMARY}"
 echo "DUMP_SPIKE_STATS=${DUMP_SPIKE_STATS}"
+echo "USE_CHECKPOINT=${USE_CHECKPOINT}"
+echo "CHECKPOINT_NUM=${CHECKPOINT_NUM}"
 
 CMD=(
         "${RUN_CMD[@]}"
@@ -152,6 +156,7 @@ CMD=(
         --snn_lif_tau "${SNN_LIF_TAU}" \
         --snn_lif_backend "${SNN_LIF_BACKEND}" \
         --spike_lr_multiplier "${SPIKE_LR_MULTIPLIER}" \
+        --checkpoint_num "${CHECKPOINT_NUM}" \
         --train_crop_min_scale "${TRAIN_CROP_MIN_SCALE}" \
         --train_crop_max_scale "${TRAIN_CROP_MAX_SCALE}" \
         --train_crop_min_ratio "${TRAIN_CROP_MIN_RATIO}" \
@@ -170,6 +175,10 @@ fi
 
 if [ "${DUMP_SPIKE_STATS}" != "0" ]; then
         CMD+=(--dump_spike_stats)
+fi
+
+if [ "${USE_CHECKPOINT}" != "0" ]; then
+        CMD+=(--use_checkpoint)
 fi
 
 if [ "${SKIP_INITIAL_BEST_CHECKPOINT}" != "0" ]; then
