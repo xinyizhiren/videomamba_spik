@@ -7,7 +7,7 @@ BASE_LAUNCHER="${PROJECT_DIR}/exp/run_f16x224_trainable_snn.sh"
 
 # Train a full-scope 24-block unsigned LIF SNN from the stronger val+test ANN.
 # CUDA indexes start from 0; override CUDA_VISIBLE_DEVICES/NPROC_PER_NODE as needed.
-export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-2}"
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1}"
 export NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
 export NNODES="${NNODES:-1}"
 export NODE_RANK="${NODE_RANK:-0}"
