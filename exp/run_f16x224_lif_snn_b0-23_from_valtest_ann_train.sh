@@ -23,7 +23,7 @@ export SNN_SPIKE_POSITION="${SNN_SPIKE_POSITION:-post}"
 export SNN_SPIKE_PATCH="${SNN_SPIKE_PATCH:-0}"
 export SNN_TIMESTEPS="${SNN_TIMESTEPS:-4}"
 
-ANN_OUTPUT_DIR="${ANN_OUTPUT_DIR:-${PROJECT_DIR}/outputs/videomamba_small_lif_unsigned_snn_b0-1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-16-17-18-19-20-21-22-23_t4_from_valtest_ann}"
+ANN_OUTPUT_DIR="${ANN_OUTPUT_DIR:-${PROJECT_DIR}/outputs/videomamba_small_cv_train12_valtest_ann_clean_full}"
 export MODEL_PATH="${MODEL_PATH:-${ANN_OUTPUT_DIR}/best.pth}"
 export TEACHER_CHECKPOINT="${TEACHER_CHECKPOINT:-${ANN_OUTPUT_DIR}/best.pth}"
 
@@ -36,7 +36,7 @@ fi
 export JOB_NAME="${JOB_NAME:-videomamba_small_lif_${SNN_SIGN_TAG}_snn_b${SNN_BLOCK_TAG}_t${SNN_TIMESTEPS}_from_valtest_ann}"
 export OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_DIR}/outputs/${JOB_NAME}}"
 
-RESUME_FROM_LATEST="${RESUME_FROM_LATEST:-0}"
+RESUME_FROM_LATEST="${RESUME_FROM_LATEST:-1}"
 DEFAULT_RESUME_PATH="${OUTPUT_DIR}/latest.pth"
 if [ "${RESUME_FROM_LATEST}" != "0" ] && [ -z "${RESUME_PATH:-}" ]; then
         export RESUME_PATH="${DEFAULT_RESUME_PATH}"
@@ -48,7 +48,7 @@ export MIN_LR="${MIN_LR:-1e-6}"
 export WARMUP_EPOCHS="${WARMUP_EPOCHS:-1}"
 export DISTILL_WEIGHT="${DISTILL_WEIGHT:-0.0}"
 export DISTILL_TEMPERATURE="${DISTILL_TEMPERATURE:-2.0}"
-export BATCH_SIZE="${BATCH_SIZE:-2}"
+export BATCH_SIZE="${BATCH_SIZE:-1}"
 export UPDATE_FREQ="${UPDATE_FREQ:-2}"
 export CUDNN_BENCHMARK="${CUDNN_BENCHMARK:-0}"
 export DUMP_MODEL_SUMMARY="${DUMP_MODEL_SUMMARY:-0}"
