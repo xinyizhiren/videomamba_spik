@@ -25,7 +25,6 @@ outputs are preserved under `trash_code/`.
 |   |-- run_f16x224_ann_et_clean_test.sh
 |   |-- run_f16x224_ann_et_clean_valtest.sh
 |   |-- run_f16x224_ann_et_clean_valtest_test.sh
-|   |-- resume_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
 |   |-- run_f16x224_lif_snn_b0-23_from_b0-11_train.sh
 |   |-- run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
 |   `-- run_f16x224_trainable_snn.sh
@@ -106,19 +105,19 @@ outputs/videomamba_small_lif_unsigned_snn_b0-1-2-3-4-5-6-7-8-9-10-11-12-13-14-15
 Training prints the best validation result at the end and also writes it to
 `best_result.json`.
 
-Resume the valtest 24-block SNN from its latest checkpoint:
+Resume the valtest 24-block SNN from its latest checkpoint with the same launcher:
 
 ```bash
-bash exp/resume_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
+RESUME_FROM_LATEST=1 bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
 ```
 
-The resume launcher defaults to:
+This resolves to:
 
 ```text
 outputs/videomamba_small_lif_unsigned_snn_b0-1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-16-17-18-19-20-21-22-23_t4_from_valtest_ann/latest.pth
 ```
 
-You can also resume any checkpoint through the base launcher:
+You can also resume any checkpoint through the same launcher:
 
 ```bash
 RESUME_PATH=outputs/.../latest.pth bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
