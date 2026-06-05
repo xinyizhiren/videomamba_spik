@@ -30,6 +30,7 @@ outputs/**
 !outputs/**/*.log
 !outputs/**/run_metadata.json
 !outputs/**/spike_stats.json
+!outputs/**/best_result.json
 !outputs/**/conversion_summary.json
 logs/**
 !logs/**/
@@ -55,6 +56,7 @@ events.out.tfevents*
 !outputs/**/*.txt
 !outputs/**/run_metadata.json
 !outputs/**/spike_stats.json
+!outputs/**/best_result.json
 !outputs/**/conversion_summary.json
 !logs/**/*.log
 !logs/**/*.txt

@@ -828,6 +828,14 @@ def write_log(args, stats, filename="log.txt"):
         f.write(json.dumps(stats, ensure_ascii=False) + "\n")
 
 
+def write_json(args, stats, filename):
+    if not is_main_process():
+        return
+    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+    path = Path(args.output_dir) / filename
+    path.write_text(json.dumps(stats, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
 def write_run_metadata(args, model, teacher_model=None):
     if not is_main_process():
         return
@@ -1040,8 +1048,12 @@ def run(args):
 
     if args.resume:
         args.start_epoch, best_acc1 = load_resume(model, optimizer, scheduler, args.resume, device)
+        best_epoch = args.start_epoch - 1
+        best_stats = None
     else:
         best_acc1 = 0.0
+        best_epoch = None
+        best_stats = None
 
     if not args.skip_initial_eval or args.dump_model_summary:
         initialize_spikes_from_train_batch(model, train_loader, device, args)
@@ -1067,6 +1079,8 @@ def run(args):
         )
         if not args.skip_initial_best_checkpoint and initial_stats["val_acc1"] >= best_acc1:
             best_acc1 = initial_stats["val_acc1"]
+            best_epoch = initial_stats["epoch"]
+            best_stats = dict(initial_stats)
             save_checkpoint(args, model, optimizer, scheduler, args.start_epoch - 1, best_acc1, "best")
 
     for epoch in range(args.start_epoch, args.epochs):
@@ -1103,10 +1117,33 @@ def run(args):
             f"val_loss={stats['val_loss']:.4f}"
         )
 
-        save_checkpoint(args, model, optimizer, scheduler, epoch, best_acc1, "latest")
         if stats["val_acc1"] >= best_acc1:
             best_acc1 = stats["val_acc1"]
+            best_epoch = epoch
+            best_stats = dict(stats)
             save_checkpoint(args, model, optimizer, scheduler, epoch, best_acc1, "best")
+        save_checkpoint(args, model, optimizer, scheduler, epoch, best_acc1, "latest")
+
+    if best_stats is None:
+        best_stats = {
+            "mode": "best",
+            "epoch": best_epoch,
+            "val_acc1": best_acc1,
+        }
+    best_stats = {
+        **best_stats,
+        "mode": "best",
+        "epoch": best_epoch,
+        "best_acc1": best_acc1,
+    }
+    write_json(args, best_stats, "best_result.json")
+    main_print(
+        f"Best validation: "
+        f"epoch={best_stats.get('epoch')} "
+        f"val_acc1={best_stats.get('val_acc1', best_acc1):.2f} "
+        f"val_acc5={best_stats.get('val_acc5', 0.0):.2f} "
+        f"val_loss={best_stats.get('val_loss', 0.0):.4f}"
+    )
 
 
 def main():
