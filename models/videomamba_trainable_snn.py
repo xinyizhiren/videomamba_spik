@@ -406,6 +406,8 @@ def create_videomamba_small_trainable_snn(
     lif_tau=2.0,
     lif_backend="torch",
     detach_reset=True,
+    use_checkpoint=False,
+    checkpoint_num=0,
 ):
     return TrainableVideoMambaSNN(
         img_size=img_size,
@@ -421,6 +423,8 @@ def create_videomamba_small_trainable_snn(
         drop_path_rate=drop_path,
         fc_drop_rate=fc_drop_rate,
         use_mean_pooling=use_mean_pooling,
+        use_checkpoint=use_checkpoint,
+        checkpoint_num=checkpoint_num,
         spike_patch=spike_patch,
         spike_block_indices=spike_block_indices,
         spike_position=spike_position,
