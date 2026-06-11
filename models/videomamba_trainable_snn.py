@@ -21,6 +21,10 @@ def parse_block_indices(text):
     return tuple(values)
 
 
+def normalize_block_indices(values):
+    return tuple(sorted(set(parse_block_indices(values))))
+
+
 def inverse_softplus(x):
     x = torch.clamp(x, min=1e-6)
     return x + torch.log(-torch.expm1(-x))
@@ -215,6 +219,8 @@ class TrainableVideoMambaSNN(CleanVideoMamba):
         *args,
         spike_patch=False,
         spike_block_indices=(0,),
+        pre_spike_block_indices=None,
+        post_spike_block_indices=None,
         spike_position="post",
         spike_layer="trainable",
         snn_timesteps=4,
@@ -230,10 +236,25 @@ class TrainableVideoMambaSNN(CleanVideoMamba):
     ):
         super().__init__(*args, **kwargs)
         self.spike_patch = bool(spike_patch)
-        self.spike_block_indices = tuple(sorted(set(int(x) for x in spike_block_indices)))
+        base_spike_block_indices = normalize_block_indices(spike_block_indices)
         self.spike_position = str(spike_position).lower()
         if self.spike_position not in {"pre", "post", "prepost"}:
             raise ValueError(f"Unsupported spike_position: {spike_position}")
+        if pre_spike_block_indices is None:
+            self.pre_spike_block_indices = (
+                base_spike_block_indices if self.spike_position in {"pre", "prepost"} else ()
+            )
+        else:
+            self.pre_spike_block_indices = normalize_block_indices(pre_spike_block_indices)
+        if post_spike_block_indices is None:
+            self.post_spike_block_indices = (
+                base_spike_block_indices if self.spike_position in {"post", "prepost"} else ()
+            )
+        else:
+            self.post_spike_block_indices = normalize_block_indices(post_spike_block_indices)
+        self.spike_block_indices = tuple(
+            sorted(set(self.pre_spike_block_indices + self.post_spike_block_indices))
+        )
         self.spike_layer = str(spike_layer).lower()
         if self.spike_layer not in {"trainable", "lif"}:
             raise ValueError(f"Unsupported spike_layer: {spike_layer}")
@@ -257,26 +278,24 @@ class TrainableVideoMambaSNN(CleanVideoMamba):
         self.pre_block_spikes = nn.ModuleDict(
             OrderedDict(
                 (str(idx), make_spike_module(self.spike_layer, "3d", self.embed_dim, spike_kwargs))
-                for idx in self.spike_block_indices
-                if self.spike_position in {"pre", "prepost"}
+                for idx in self.pre_spike_block_indices
             )
         )
         self.block_spikes = nn.ModuleDict(
             OrderedDict(
                 (str(idx), make_spike_module(self.spike_layer, "3d", self.embed_dim, spike_kwargs))
-                for idx in self.spike_block_indices
-                if self.spike_position in {"post", "prepost"}
+                for idx in self.post_spike_block_indices
             )
         )
 
     def iter_spike_modules(self):
         if self.spike_patch:
             yield self.patch_spike
-        for idx in self.spike_block_indices:
+        for idx in self.pre_spike_block_indices:
             key = str(idx)
             if key in self.pre_block_spikes:
                 yield self.pre_block_spikes[key]
-        for idx in self.spike_block_indices:
+        for idx in self.post_spike_block_indices:
             key = str(idx)
             if key in self.block_spikes:
                 yield self.block_spikes[key]
@@ -285,10 +304,12 @@ class TrainableVideoMambaSNN(CleanVideoMamba):
         names = []
         if self.spike_patch:
             names.append("patch_spike")
-        for idx in self.spike_block_indices:
+        for idx in self.pre_spike_block_indices:
             key = str(idx)
             if key in self.pre_block_spikes:
                 names.append(f"pre_block_spikes.{idx}")
+        for idx in self.post_spike_block_indices:
+            key = str(idx)
             if key in self.block_spikes:
                 names.append(f"block_spikes.{idx}")
         return names
@@ -299,10 +320,12 @@ class TrainableVideoMambaSNN(CleanVideoMamba):
         names = []
         if self.spike_patch:
             names.append("patch_spike.log_threshold")
-        for idx in self.spike_block_indices:
+        for idx in self.pre_spike_block_indices:
             key = str(idx)
             if key in self.pre_block_spikes:
                 names.append(f"pre_block_spikes.{idx}.log_threshold")
+        for idx in self.post_spike_block_indices:
+            key = str(idx)
             if key in self.block_spikes:
                 names.append(f"block_spikes.{idx}.log_threshold")
         return names
@@ -395,6 +418,8 @@ def create_videomamba_small_trainable_snn(
     use_mean_pooling=True,
     spike_patch=False,
     spike_block_indices=(0,),
+    pre_spike_block_indices=None,
+    post_spike_block_indices=None,
     spike_position="post",
     spike_layer="trainable",
     snn_timesteps=4,
@@ -427,6 +452,8 @@ def create_videomamba_small_trainable_snn(
         checkpoint_num=checkpoint_num,
         spike_patch=spike_patch,
         spike_block_indices=spike_block_indices,
+        pre_spike_block_indices=pre_spike_block_indices,
+        post_spike_block_indices=post_spike_block_indices,
         spike_position=spike_position,
         spike_layer=spike_layer,
         snn_timesteps=snn_timesteps,

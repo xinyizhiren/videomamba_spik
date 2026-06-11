@@ -100,16 +100,25 @@ If memory is still tight, use these overrides in order:
 VALTEST_SNN_TIMESTEPS=2 bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh
 ```
 
+By default, the active script now inserts one LIF spike layer before Mamba block
+0 and one LIF spike layer after every Mamba block 0-23:
+
+```text
+SNN_PRE_BLOCK_INDICES=0
+SNN_POST_BLOCK_INDICES=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23
+```
+
 The active script writes to:
 
 ```text
-outputs/videomamba_small_lif_unsigned_snn_b0-1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-16-17-18-19-20-21-22-23_t4_from_valtest_ann/
+outputs/videomamba_small_lif_unsigned_snn_preb0_postb0-1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-16-17-18-19-20-21-22-23_t4_from_valtest_ann/
 ```
 
 Training prints the best validation result at the end and also writes it to
 `best_result.json`.
 
-Resume the valtest 24-block SNN from its latest checkpoint with the same launcher:
+Resume the valtest pre-block0/post-block0-23 SNN from its latest checkpoint with
+the same launcher:
 
 ```bash
 bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh resume
@@ -118,8 +127,12 @@ bash exp/run_f16x224_lif_snn_b0-23_from_valtest_ann_train.sh resume
 This resolves to:
 
 ```text
-outputs/videomamba_small_lif_unsigned_snn_b0-1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-16-17-18-19-20-21-22-23_t4_from_valtest_ann/latest.pth
+outputs/videomamba_small_lif_unsigned_snn_preb0_postb0-1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-16-17-18-19-20-21-22-23_t4_from_valtest_ann/latest.pth
 ```
+
+To initialize this stronger-spiking model from the previous post-only SNN
+checkpoint instead of the ANN checkpoint, run without `resume` and override
+`VALTEST_MODEL_PATH`.
 
 You can also resume any checkpoint through the same launcher:
 

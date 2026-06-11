@@ -178,6 +178,8 @@ def get_args():
     parser.add_argument("--use_mean_pooling", action="store_true", default=True)
     parser.add_argument("--use_cls", action="store_false", dest="use_mean_pooling")
     parser.add_argument("--snn_block_indices", default="0")
+    parser.add_argument("--snn_pre_block_indices", default="")
+    parser.add_argument("--snn_post_block_indices", default="")
     parser.add_argument("--snn_spike_patch", action="store_true", default=False)
     parser.add_argument("--snn_spike_position", default="post", choices=("pre", "post", "prepost"))
     parser.add_argument("--snn_spike_layer", default="trainable", choices=("trainable", "lif"))
@@ -330,6 +332,16 @@ def build_model(args):
     if model_name == "videomamba_small_trainable_snn":
         from models.videomamba_trainable_snn import create_videomamba_small_trainable_snn
 
+        pre_block_indices = (
+            parse_int_tuple(args.snn_pre_block_indices)
+            if str(args.snn_pre_block_indices).strip()
+            else None
+        )
+        post_block_indices = (
+            parse_int_tuple(args.snn_post_block_indices)
+            if str(args.snn_post_block_indices).strip()
+            else None
+        )
         return create_videomamba_small_trainable_snn(
             img_size=args.input_size,
             num_classes=args.nb_classes,
@@ -340,6 +352,8 @@ def build_model(args):
             use_mean_pooling=args.use_mean_pooling,
             spike_patch=args.snn_spike_patch,
             spike_block_indices=parse_int_tuple(args.snn_block_indices),
+            pre_spike_block_indices=pre_block_indices,
+            post_spike_block_indices=post_block_indices,
             spike_position=args.snn_spike_position,
             spike_layer=args.snn_spike_layer,
             snn_timesteps=args.snn_timesteps,
@@ -856,6 +870,8 @@ def write_run_metadata(args, model, teacher_model=None):
         "spike_position": getattr(target, "spike_position", None),
         "spike_layer": getattr(target, "spike_layer", None),
         "spike_block_indices": list(getattr(target, "spike_block_indices", [])),
+        "pre_spike_block_indices": list(getattr(target, "pre_spike_block_indices", [])),
+        "post_spike_block_indices": list(getattr(target, "post_spike_block_indices", [])),
         "snn_timesteps": getattr(target, "snn_timesteps", None),
         "signed_spikes": getattr(target, "signed_spikes", None),
         "lif_tau": getattr(target, "lif_tau", None),
